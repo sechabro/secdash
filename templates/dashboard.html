@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visitor Dashboard</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 10px;
+        }
+
+        .tab {
+            margin-right: 10px;
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #eee;
+            border-radius: 5px;
+        }
+
+        .tab.active {
+            background-color: #ccc;
+        }
+
+        .content {
+            display: none;
+        }
+
+        .content.active {
+            display: block;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 6px;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .collapsible {
+            cursor: pointer;
+            margin-top: 10px;
+            background-color: #f9f9f9;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            text-align: left;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease, padding 0.4s ease;
+            padding: 0 1rem;
+            background-color: #f0f0f0;
+            margin-top: 5px;
+        }
+
+        .collapsible-content.visible {
+            max-height: 500px;
+            padding: 10px 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="tabs">
+        <div class="tab active" onclick="showTab('visitor')">閲覧者情報</div>
+        <div class="tab" onclick="showTab('connections')">外部接続</div>
+        <div class="tab" onclick="showTab('host')">ホスト状況</div>
+        <div class="tab" onclick="showTab('processes')">サーバ側の処理</div>
+    </div>
+
+    <div id="visitor" class="content active">
+        <pre id="visitor-data"></pre>
+        <button class="collapsible">隠す・出す IPDB情報</button>
+        <div class="collapsible-content">
+            <pre id="ipdb-data"></pre>
+        </div>
+    </div>
+
+    <div id="connections" class="content">
+        <table id="connections-table">
+            <thead>
+                <tr>
+                    <th>cmd</th>
+                    <th>pid</th>
+                    <th>user</th>
+                    <th>fd</th>
+                    <th>type</th>
+                    <th>device</th>
+                    <th>size/off</th>
+                    <th>node</th>
+                    <th>address</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div id="host" class="content">
+        <pre id="host-status"></pre>
+        <h2>サーバ入出力のリアルタイムデーター (1秒ごと)</h2>
+        <pre id="iostat-data"></pre>
+    </div>
+
+    <div id="processes" class="content">
+        <h2>サーバ側のリアルタイムビューアー (1秒ごと)</h2>
+        <pre id="process-data">Processing List-Out</pre>
+    </div>
+    <script>
+        async function fetchHostStatus() {
+            const hostStatus = await fetch('/host');
+            const hostData = await hostStatus.json();
+            let hostContent = "<ul>";
+
+            for (const key in hostData) {
+                if (typeof hostData[key] === "object" && hostData[key] !== null) {
+                    hostContent += `<li><strong>${key}:</strong><pre>${JSON.stringify(hostData[key], null, 2)}</pre></li>`;
+                } else {
+                    hostContent += `<li><strong>${key}:</strong> ${hostData[key]}</li>`;
+                }
+            }
+            hostContent += "</ul>";
+            document.getElementById('host-status').innerHTML = hostContent;
+        }
+
+        async function fetchVisitorData() {
+            const visitorRes = await fetch('/visitor');
+            const visitorData = await visitorRes.json();
+            const { ipdb: { data: ipDetails }, ...rest } = visitorData;
+
+            let visitorContent = "<ul>";
+            for (const key in rest) {
+                visitorContent += `<li><strong>${key}:</strong> ${typeof rest[key] === "object" && rest[key] !== null
+                    ? `<pre>${JSON.stringify(rest[key], null, 2)}</pre>`
+                    : rest[key]
+                    }</li>`;
+            }
+            visitorContent += "</ul>";
+
+            let abuseIpdb = "<ul>";
+            for (const key in ipDetails) {
+                abuseIpdb += `<li><strong>${key}:</strong> ${typeof ipDetails[key] === "object" && ipDetails[key] !== null
+                    ? `<pre>${JSON.stringify(ipDetails[key], null, 2)}</pre>`
+                    : ipDetails[key]
+                    }</li>`;
+            }
+            abuseIpdb += "</ul>";
+
+            document.getElementById('visitor-data').innerHTML = visitorContent;
+            document.getElementById('ipdb-data').innerHTML = abuseIpdb;
+        }
+
+        async function fetchConnectionsData() {
+            const connRes = await fetch('/connections');
+            const connData = await connRes.json();
+            const tableBody = document.querySelector('#connections-table tbody');
+            tableBody.innerHTML = "";  // Clear existing rows first
+            connData.forEach(row => {
+                const tr = document.createElement('tr');
+                Object.values(row).forEach(val => {
+                    const td = document.createElement('td');
+                    td.textContent = val;
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+        }
+
+        ///////////////////////////////////////////////////////////////////////
+
+        // SSE for iostat streaming
+        const iostatEventSource = new EventSource("/iostat-stream");
+        iostatEventSource.onmessage = function (event) {
+            const readings = JSON.parse(event.data);  // An array of iostat readings
+            const display = readings.map(data =>
+                `date: ${data.date}, time: ${data.time}, avg_io_size: ${data.kbt}KB/t, io_ops_sec: ${data.tps}tps, throughput: ${data.mbs}MB/s, cpu_user_pct: ${data.user}, cpu_system_pct: ${data.sys}, cpu_idle_pct: ${data.idle}, load_avg_1m: ${data.load_avg_1m}`
+            ).join('\n');
+            document.getElementById("iostat-data").innerText = display;
+        };
+
+        // SSE for process streaming
+        const processEventSource = new EventSource("/process-stream");
+        processEventSource.onmessage = function (event) {
+            const ps = JSON.parse(event.data);  // An array of process records
+            const processes = ps.map(data =>
+                `date: ${data.date}, time: ${data.time}, user: ${data.user}, pid: ${data.pid}, cpu_pct: ${data.cpu_pct}, mem_pct: ${data.mem_pct}, vsz_kb: ${data.vsz_kb}, rss_kb: ${data.rss_kb}, tty: ${data.tty}, stat: ${data.stat}, start: ${data.start}, cpu_time: ${data.cpu_time}, command: ${data.command}`
+            ).join('\n');
+            document.getElementById("process-data").innerText = processes;
+        };
+
+        ////////////////////////////////////////////////////////////////////////
+
+        // UI HANDLING
+        document.querySelector('.collapsible').addEventListener('click', () => {
+            const content = document.querySelector('.collapsible-content');
+            content.classList.toggle('visible');
+        });
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab[onclick*="${tabId}"]`).classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+
+            if (tabId === 'host') {
+                fetchHostStatus();  // refresh this tab's content
+            } else if (tabId === 'connections') {
+                fetchConnectionsData();
+            }
+        }
+
+        ////////////////////////////////////////////////////////////////////////
+
+        // ON START TRIGGERS
+        fetchVisitorData();
+    </script>
+</body>
+
+</html>
