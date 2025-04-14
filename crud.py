@@ -21,10 +21,10 @@ async def visitor_info_post(session: AsyncSession, item: schemas.Visitor):
     return item
 
 
-async def get_user_by_email(session: AsyncSession, email: EmailStr):
+async def get_user_by_email(session: AsyncSession, email: EmailStr) -> schemas.UserInDb:
     statement = select(schemas.UserInDb).where(schemas.UserInDb.email == email)
-    result = await session.execute(statement)
-    return result.one_or_none()
+    result = await session.execute(statement=statement)
+    return result.scalar_one_or_none()
 
 
 async def register_user(session: AsyncSession, user: schemas.UserReg):

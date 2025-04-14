@@ -55,3 +55,14 @@ class UserInDb(UserReg, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     regdate: str
+
+# ------------- TOKEN-RELATED CLASSES -------------
+
+
+class Token(SQLModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(SQLModel):
+    username: str | None = None
