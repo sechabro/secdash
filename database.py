@@ -9,7 +9,7 @@ abpwd = str(os.getenv('ABPWD', default=None))
 DATABASE_URL = f"postgresql+asyncpg://aberdeen:{abpwd}@localhost:5432/secdash"
 
 
-engine = create_async_engine(DATABASE_URL, echo=True)
+engine = create_async_engine(DATABASE_URL, echo=False)
 async_session_maker = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )

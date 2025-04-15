@@ -225,7 +225,6 @@ async def host_info_async() -> dict:
 
 async def password_verify(password: str | None = None,
                           hashed: str | None = None) -> bool:
-    logger.info(f'password: {password}, hash: {hashed}')
     try:
         return await run_in_threadpool(psh.verify, hash=hashed, password=password)
     except VerificationError:

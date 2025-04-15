@@ -183,14 +183,14 @@
     <h1>Welcome to SecDash</h1>
 
     <!-- Login Form -->
-    <form action="/login" method="POST">
-        <label for="username_email">Username or Email:</label>
-        <input type="text" id="username_email" name="username_email" required>
+    <form id="login-form" action="/login" method="POST">
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required>
 
         <label for="password">Password:</label>
         <input type="password" id="password" name="password" required>
 
-        <button type="submit">Log In</button>
+        <button id="login-button" type="submit">Log In</button>
     </form>
 
     <!-- Registration Link -->
@@ -283,6 +283,45 @@
             } catch (error) {
                 console.error("Error during registration:", error);
                 // You might display an error message to the user here
+            }
+        });
+
+        // Login Processing
+        const loginButton = document.getElementById("login-button")
+
+        // login listener
+        loginButton.addEventListener("click", async (e) => {
+            // Prevent the form's default submission behavior
+            e.preventDefault();
+            const loginForm = document.querySelector("#login-form")
+
+            const loginValues = new FormData(loginForm);
+
+            // FormData conversion
+            const loginData = {};
+            loginValues.forEach((value, key) => {
+                loginData[key] = value;
+            });
+
+            try {
+                // Post the form data as JSON to the /login endpoint
+                const loginResponse = await fetch("/login", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(loginData)
+                });
+                // Check if the response is OK (code 200)
+                if (!loginResponse.ok) {
+                    throw new Error(`login failed: ${loginResponse.statusText}`);
+                }
+
+                // Optionally, process the JSON response
+                const tokenData = await loginResponse.json();
+                console.log("RESPONSE: ", tokenData)
+            } catch (error) {
+                console.error("Error during login:", error);
             }
         });
     </script>

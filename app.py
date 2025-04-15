@@ -3,7 +3,7 @@ from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from utils import established_connections, visitor_info, host_info_async, ps_stream, io_stream, password_hasher, password_verify
 from datetime import timedelta, datetime, timezone
 from fastapi.concurrency import run_in_threadpool
@@ -35,6 +35,13 @@ async def on_startup():
 @app.get("/", response_class=HTMLResponse, response_model=None)
 async def home(request: Request):
     return templates.TemplateResponse("home.html", {"request": request})
+
+
+@app.post("/login", response_class=JSONResponse, response_model=None)
+async def login(request: Request, user: schemas.User, session: SessionDep) -> schemas.Token:
+    oauth2_form = OAuth2PasswordRequestForm(
+        username=user.email, password=user.password)
+    return await token(form_data=oauth2_form, session=session)
 
 
 @app.post("/register", response_class=HTMLResponse, response_model=schemas.User)

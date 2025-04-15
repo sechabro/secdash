@@ -42,12 +42,13 @@ class IOStatLine(SQLModel, table=True):
 # ----------- USER-RELATED CLASSES ------------
 
 class User(SQLModel):
-    username: Annotated[str, Field(min_length=8, max_length=20)]
+    email: EmailStr
+    password: Annotated[str, Field(min_length=8, max_length=1000)]
 
 
 class UserReg(User):
-    email: EmailStr
-    password: Annotated[str, Field(min_length=8, max_length=1000)]
+
+    username: Annotated[str, Field(min_length=8, max_length=20)]
 
 
 class UserInDb(UserReg, table=True):
