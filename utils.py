@@ -144,7 +144,6 @@ async def io_stream(script: str | None = None):
 
 async def visitor_info(request: Request, session: Session) -> dict:
     # Get the visitor's IP address (you might need to adapt this for proxies)
-    logger.info(f' session type: {type(session)}')
     client_ip = request.client.host
     client_port = request.client.port
     if client_ip in ("127.0.0.1", "::1"):
@@ -160,7 +159,7 @@ async def visitor_info(request: Request, session: Session) -> dict:
             geo_info=fake_info.get("geo_info"),
             ipdb=fake_info.get("ipdb")
         )
-        info_post = await visitor_info_post(db=session, item=visitor)
+        info_post = await visitor_info_post(session=session, item=visitor)
         return info_post.model_dump()
 
     # Get the timestamp of the request

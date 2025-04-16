@@ -43,11 +43,11 @@ class IOStatLine(SQLModel, table=True):
 
 class User(SQLModel):
     email: EmailStr
-    password: Annotated[str, Field(min_length=8, max_length=1000)]
+    password: Annotated[str, Field(
+        min_length=8, max_length=1000)] | None = None
 
 
 class UserReg(User):
-
     username: Annotated[str, Field(min_length=8, max_length=20)]
 
 

@@ -27,7 +27,7 @@ async def get_user_by_email(session: AsyncSession, email: EmailStr) -> schemas.U
     return result.scalar_one_or_none()
 
 
-async def register_user(session: AsyncSession, user: schemas.UserReg):
+async def register_user(session: AsyncSession, user: schemas.UserReg) -> schemas.UserReg:
     regdate = str(datetime.now().isoformat())
     new_user = schemas.UserInDb(
         username=user.username, email=user.email, password=user.password, regdate=regdate)
@@ -35,4 +35,4 @@ async def register_user(session: AsyncSession, user: schemas.UserReg):
     await session.commit()
     await session.refresh(new_user)
     logger.info(f' New user created successfully at {regdate}.')
-    return schemas.User(username=user.username)
+    return user

@@ -184,8 +184,8 @@
 
     <!-- Login Form -->
     <form id="login-form" action="/login" method="POST">
-        <label for="email">Email:</label>
-        <input type="email" id="email" name="email" required>
+        <label for="username">Email:</label>
+        <input type="username" id="username" name="username" required>
 
         <label for="password">Password:</label>
         <input type="password" id="password" name="password" required>
@@ -242,88 +242,44 @@
             }
         });
 
-        // Registration Processing
-        const regButton = document.getElementById("register-button")
-
-        // Attach a click event listener to the register button
-        regButton.addEventListener("click", async (e) => {
-            // Prevent the form's default submission behavior
-            e.preventDefault();
-
-            // Select the form element and make a FormData object from it
-            const form = document.querySelector("#reg-form");
-            const formData = new FormData(form);
-
-            // Convert the FormData to a plain object
-            const data = {};
-            formData.forEach((value, key) => {
-                data[key] = value;
-            });
-
-            try {
-                // Post the form data as JSON to the /register endpoint
-                const response = await fetch("/register", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                // Check if the response is OK (code 200)
-                if (!response.ok) {
-                    throw new Error(`Registration failed: ${response.statusText}`);
-                }
-
-                // Optionally, process the JSON response
-                const result = await response.json();
-                console.log("Registration successful:", result);
-                document.getElementById("register-modal").style.display = "none";
-
-            } catch (error) {
-                console.error("Error during registration:", error);
-                // You might display an error message to the user here
-            }
-        });
-
         // Login Processing
-        const loginButton = document.getElementById("login-button")
-
-        // login listener
-        loginButton.addEventListener("click", async (e) => {
-            // Prevent the form's default submission behavior
-            e.preventDefault();
-            const loginForm = document.querySelector("#login-form")
-
-            const loginValues = new FormData(loginForm);
-
-            // FormData conversion
-            const loginData = {};
-            loginValues.forEach((value, key) => {
-                loginData[key] = value;
-            });
-
-            try {
-                // Post the form data as JSON to the /login endpoint
-                const loginResponse = await fetch("/login", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(loginData)
-                });
-                // Check if the response is OK (code 200)
-                if (!loginResponse.ok) {
-                    throw new Error(`login failed: ${loginResponse.statusText}`);
-                }
-
-                // Optionally, process the JSON response
-                const tokenData = await loginResponse.json();
-                console.log("RESPONSE: ", tokenData)
-            } catch (error) {
-                console.error("Error during login:", error);
-            }
-        });
+        /* const loginButton = document.getElementById("login-button")
+ 
+         // login listener
+         loginButton.addEventListener("click", async (e) => {
+             // Prevent the form's default submission behavior
+             e.preventDefault();
+             const loginForm = document.querySelector("#login-form")
+ 
+             const loginValues = new FormData(loginForm);
+ 
+             // FormData conversion
+             const loginData = {};
+             loginValues.forEach((value, key) => {
+                 loginData[key] = value;
+             });
+ 
+             try {
+                 // Post the form data as JSON to the /login endpoint
+                 const loginResponse = await fetch("/login", {
+                     method: "POST",
+                     headers: {
+                         "Content-Type": "application/x-www-form-urlencoded"
+                     },
+                     body: JSON.stringify(loginData)
+                 });
+                 // Check if the response is OK (code 200)
+                 if (!loginResponse.ok) {
+                     throw new Error(`login failed: ${loginResponse.statusText}`);
+                 }
+ 
+                 // Optionally, process the JSON response
+                 const tokenData = await loginResponse.json();
+                 console.log("RESPONSE: ", tokenData)
+             } catch (error) {
+                 console.error("Error during login:", error);
+             }
+         }); */
     </script>
 </body>
 

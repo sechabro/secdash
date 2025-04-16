@@ -1,14 +1,15 @@
-from fastapi import FastAPI, Request, Response, HTTPException, Depends, status
+from fastapi import FastAPI, Request, Response, Form, HTTPException, Depends, status, Cookie
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
 from utils import established_connections, visitor_info, host_info_async, ps_stream, io_stream, password_hasher, password_verify
 from datetime import timedelta, datetime, timezone
 from fastapi.concurrency import run_in_threadpool
 import jwt
 from jwt.exceptions import InvalidTokenError
+from pydantic import EmailStr
 import os
 import base64
 from sqlmodel import SQLModel
@@ -25,6 +26,34 @@ app = FastAPI()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 
+async def get_current_user(access_token: str = Cookie(None)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid authentication credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if access_token is None:
+        logger.info(f' \n\n access token is None for some reason...\n\n')
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            logger.info(
+                f' \n\n username from token is None, for some reason...\n\n')
+            raise credentials_exception
+        exp = payload.get("exp")
+        if exp and datetime.fromtimestamp(exp) < datetime.now():
+            credentials_exception.detail = "Token expired. Please login again."
+            raise credentials_exception
+        return username
+
+    except InvalidTokenError:
+        logger.info(
+            f' \n\nInvalidTokenError exception raised for some reason...\n\n')
+        raise credentials_exception
+
+
 @app.on_event("startup")
 async def on_startup():
     if database_check():
@@ -38,28 +67,54 @@ async def home(request: Request):
 
 
 @app.post("/login", response_class=JSONResponse, response_model=None)
-async def login(request: Request, user: schemas.User, session: SessionDep) -> schemas.Token:
-    oauth2_form = OAuth2PasswordRequestForm(
-        username=user.email, password=user.password)
-    return await token(form_data=oauth2_form, session=session)
+async def login(request: Request, response: Response,
+                form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> RedirectResponse:
+    user = await authenticate_user(
+        session=session, email=form_data.username, password=form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    token_response = await token(email=form_data.username, session=session, response=response)
+    redirect_response = RedirectResponse(url="/dashboard", status_code=303)
+    set_cookie_headers = token_response.headers.getlist("set-cookie")
+
+    # appending the cookies to the redirect response
+    for cookie_header in set_cookie_headers:
+        redirect_response.headers.append("set-cookie", cookie_header)
+    return redirect_response
 
 
 @app.post("/register", response_class=HTMLResponse, response_model=schemas.User)
-async def register(request: Request, user: schemas.UserReg, session: SessionDep):
-    db_user = await crud.get_user_by_email(session, email=user.email)
+async def register(request: Request,
+                   username: Annotated[str, Form()],
+                   email: Annotated[EmailStr, Form()],
+                   password: Annotated[str, Form()],
+                   session: SessionDep):
+
+    db_user = await crud.get_user_by_email(session, email=email)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    pswd_hash_salt = await password_hasher(password=user.password)
-    user.password = pswd_hash_salt
+    pswd_hash_salt = await password_hasher(password=password)
+    user = schemas.UserReg(username=username, email=email,
+                           password=pswd_hash_salt)
 
     reg_user = await crud.register_user(session=session, user=user)
 
-    return templates.TemplateResponse("registered.html", {"request": request, "user": reg_user})
+    return RedirectResponse(url=f"/registered?username={reg_user.username}", status_code=303)
+
+
+@app.get("/registered", response_class=HTMLResponse)
+async def registered(request: Request, username: str, session: SessionDep):
+    return templates.TemplateResponse("registered.html", {"request": request, "user": username})
 
 
 @app.get("/dashboard", response_class=HTMLResponse, response_model=None)
-async def dashboard(request: Request, session: SessionDep):
+async def dashboard(request: Request, session: SessionDep, current_user: str = Depends(get_current_user)):
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
@@ -91,6 +146,11 @@ async def process_stream() -> dict:
 ##### OAUTH2 #######################################################################################
 ########## LOGIN ###################################################################################
 ############## FLOW ################################################################################
+################# NOTES ############################################################################
+# Technically, this is known as a Resource Owner Password Credentials (ROPC) grant. However, although
+# it doesn’t involve an intermediate authorization code or redirecting to a third-party login page,
+# it’s still one of the flows outlined in the OAuth2 specification. But it's my server that crafts
+# and grants the authorization token.
 
 EXPIRE_MINUTES = 30
 ALGORITHM = "HS256"
@@ -98,19 +158,29 @@ SECRET_KEY = os.getenv('SECD', default=None)
 
 
 @app.post("/token")
-async def token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> schemas.Token:
-    user = await authenticate_user(
+async def token(response: Response, email: EmailStr, session: SessionDep) -> Response:
+    '''user = await authenticate_user(
         session=session, email=form_data.username, password=form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"}
-        )
+        )'''
     access_token_expires = timedelta(minutes=EXPIRE_MINUTES)
     access_token = await create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires)
-    return schemas.Token(access_token=access_token, token_type="bearer")
+        data={"sub": email}, expires_delta=access_token_expires)
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="strict",
+        secure=False,  # change to True before heading to production!
+        max_age=access_token_expires.total_seconds()
+    )
+    logger.info(f' \n\n token created. cookie set\n\n')
+    return response
 
 
 async def authenticate_user(session: SessionDep, email: str, password: str):
@@ -135,27 +205,7 @@ async def create_access_token(data: dict, expires_delta: timedelta | None = None
     return encoded_jwt
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid authentication credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        token_data = schemas.TokenData(username=username)
-    except InvalidTokenError:
-        raise credentials_exception
-    user = await get_user(session=SessionDep, email=token_data.username)
-    if user is None:
-        raise credentials_exception
-    return user
-
-
-async def get_user(session: AsyncSession, email: str) -> schemas.UserInDb:
+'''async def get_user(session: AsyncSession, email: str) -> schemas.UserInDb:
     user = crud.get_user_by_email(
         session=session, email=email)
     if user:
@@ -166,10 +216,10 @@ async def get_user(session: AsyncSession, email: str) -> schemas.UserInDb:
             "email": user.email,
             "username": user.username
         }
-        return schemas.UserInDb(**user_dict)
+        return schemas.UserInDb(**user_dict)'''
 
 
-current_user = Annotated[schemas.UserInDb, Depends(get_current_user)]
+# current_user = Annotated[schemas.UserInDb, Depends(get_current_user)]
 
 ###################################################################################################
 ###################################################################################################
