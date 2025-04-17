@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
 from utils import established_connections, visitor_info, host_info_async, ps_stream, io_stream, password_hasher, password_verify
 from datetime import timedelta, datetime, timezone
+from contextlib import asynccontextmanager
 from fastapi.concurrency import run_in_threadpool
 import jwt
 from jwt.exceptions import InvalidTokenError
@@ -16,7 +17,7 @@ from sqlmodel import SQLModel
 import schemas
 import logging
 import crud
-from database import engine, database_check, get_session
+from database import temp_sync_engine, database_check, get_session
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -55,10 +56,10 @@ async def get_current_user(access_token: str = Cookie(None)):
 
 
 @app.on_event("startup")
-async def on_startup():
+def on_startup():
     if database_check():
-        async with engine.begin() as conn:
-            await conn.run_sync(SQLModel.metadata.create_all)
+        with temp_sync_engine.begin() as conn:
+            conn.run_sync(SQLModel.metadata.create_all)
 
 
 @app.get("/", response_class=HTMLResponse, response_model=None)
@@ -68,9 +69,14 @@ async def home(request: Request):
 
 @app.post("/login", response_class=JSONResponse, response_model=None)
 async def login(request: Request, response: Response,
-                form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> RedirectResponse:
-    user = await authenticate_user(
-        session=session, email=form_data.username, password=form_data.password)
+                form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+                session: SessionDep) -> RedirectResponse:
+
+    # does the user exist, and are their creds correct?
+    user = await authenticate_user(session=session,
+                                   email=form_data.username,
+                                   password=form_data.password)
+    # if not, raise exception.
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -78,13 +84,18 @@ async def login(request: Request, response: Response,
             headers={"WWW-Authenticate": "Bearer"}
         )
 
+    # if user is authenticated, we'll build out the token, and prepare the redirect to /dashboard.
     token_response = await token(email=form_data.username, session=session, response=response)
     redirect_response = RedirectResponse(url="/dashboard", status_code=303)
+
+    # before the redirect, we need to grab our "set-cookie" list from token response. that's where the token lives.
     set_cookie_headers = token_response.headers.getlist("set-cookie")
 
-    # appending the cookies to the redirect response
+    # and then we need to append it as "set-cookie" in the redirect response.
     for cookie_header in set_cookie_headers:
         redirect_response.headers.append("set-cookie", cookie_header)
+
+    # after, we can safely return the redirect response.
     return redirect_response
 
 
@@ -95,14 +106,17 @@ async def register(request: Request,
                    password: Annotated[str, Form()],
                    session: SessionDep):
 
+    # does this user already exist? if so, raise an exception.
     db_user = await crud.get_user_by_email(session, email=email)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # if confirmed user does not exist, let's hash & salt the password, and create the user object.
     pswd_hash_salt = await password_hasher(password=password)
     user = schemas.UserReg(username=username, email=email,
                            password=pswd_hash_salt)
 
+    # then register the user in the database.
     reg_user = await crud.register_user(session=session, user=user)
 
     return RedirectResponse(url=f"/registered?username={reg_user.username}", status_code=303)
@@ -159,18 +173,13 @@ SECRET_KEY = os.getenv('SECD', default=None)
 
 @app.post("/token")
 async def token(response: Response, email: EmailStr, session: SessionDep) -> Response:
-    '''user = await authenticate_user(
-        session=session, email=form_data.username, password=form_data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"}
-        )'''
+
+    # set our token expiration, and create our token.
     access_token_expires = timedelta(minutes=EXPIRE_MINUTES)
     access_token = await create_access_token(
         data={"sub": email}, expires_delta=access_token_expires)
 
+    # set the token as a cookie in our response object, then return it.
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -179,7 +188,7 @@ async def token(response: Response, email: EmailStr, session: SessionDep) -> Res
         secure=False,  # change to True before heading to production!
         max_age=access_token_expires.total_seconds()
     )
-    logger.info(f' \n\n token created. cookie set\n\n')
+
     return response
 
 
@@ -203,23 +212,6 @@ async def create_access_token(data: dict, expires_delta: timedelta | None = None
     encoded_jwt = await run_in_threadpool(
         func=jwt.encode, payload=to_encode, key=SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
-
-
-'''async def get_user(session: AsyncSession, email: str) -> schemas.UserInDb:
-    user = crud.get_user_by_email(
-        session=session, email=email)
-    if user:
-        user_dict = {
-            "id": user.id,
-            "regdate": user.regdate,
-            "hashed_password": user.password,
-            "email": user.email,
-            "username": user.username
-        }
-        return schemas.UserInDb(**user_dict)'''
-
-
-# current_user = Annotated[schemas.UserInDb, Depends(get_current_user)]
 
 ###################################################################################################
 ###################################################################################################
