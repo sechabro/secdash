@@ -18,15 +18,21 @@ import psutil
 import time
 import httpx
 import asyncio
+from collections import deque
 from sqlmodel import Session
 from crud import visitor_info_post, get_user_by_email
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 psh = PasswordHasher()
+
 # DB Reader
 db_reader = database.Reader('./GeoLite2-City.mmdb')
 IPDB = str(os.getenv('IPDB', default=None))
+
+# Datastreams
+iostats = deque(maxlen=30)
+running_ps = deque(maxlen=45)
 
 
 def block_ip(ip):
@@ -93,21 +99,43 @@ async def established_connections():
             if conn.get("cmd") not in excluded_cmds
             ]
 
+######################### UNIVERSAL BASH SCRIPT RUNNER ########################
+# Call this when you need to run a background process, specifically for system
+# metrics data streaming.
+
 
 async def run_script(script: str | None = None):
-    return await asyncio.create_subprocess_exec(script, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    return await asyncio.create_subprocess_exec(script,
+                                                stdout=asyncio.subprocess.PIPE,
+                                                stderr=asyncio.subprocess.PIPE)
+
+###############################################################################
+####################### UNIVERSAL STREAM DELIVERY SERVICE #####################
+
+
+async def stream_delivery(data_stream: deque):
+    old_snapshot = []
+    while True:
+        await asyncio.sleep(1)
+        new_snapshot = list(data_stream)
+        if new_snapshot != old_snapshot:
+            yield f"data: {json.dumps(new_snapshot)}\n\n"
+            old_snapshot = new_snapshot
+
+###############################################################################
+#### SYSTEM PROCESS ###########################################################
+################# METRICS #####################################################
+####################### STREAM ################################################
 
 
 async def ps_stream(script: str | None = None):
     processes = await run_script(script=script)
     try:
-        running_ps = []
         async for line in processes.stdout:
             line_strip = line.decode().strip()
             if line_strip == "END":
                 if running_ps:
-                    yield f"data: {json.dumps(running_ps)}\n\n"
-                    running_ps.clear()
+                    continue
             else:
                 running_ps.append(
                     dict(
@@ -122,24 +150,28 @@ async def ps_stream(script: str | None = None):
         print("Stopping...")
         processes.terminate()
 
+################################################################
+#### IOSTAT ####################################################
+######### METRICS ##############################################
+############### STREAM #########################################
+
 
 async def io_stream(script: str | None = None):
-    iostat = await run_script(script=script)
+    iostat_data = await run_script(script=script)
     try:
-        iostat_readings = []
-        async for line in iostat.stdout:
-            iostat_readings.append(dict(zip(
+        async for line in iostat_data.stdout:
+            iostats.append(dict(zip(
                 ["date", "time", "kbt", "tps", "mbs",
                     "user", "sys", "idle", "load_avg_1m"],
                 line.decode().strip().split(",")
             )))
-            if len(iostat_readings) > 30:
-                iostat_readings.pop(0)
-            if len(iostat_readings) == 30:
-                yield f"data: {json.dumps(iostat_readings)}\n\n"
     except KeyboardInterrupt:
         print("Stopping...")
-        iostat.terminate()
+        iostat_data.terminate()
+
+################################################################
+################################################################
+################################################################
 
 
 async def visitor_info(request: Request, session: Session) -> dict:

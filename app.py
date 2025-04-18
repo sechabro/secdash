@@ -4,15 +4,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
-from utils import established_connections, visitor_info, host_info_async, ps_stream, io_stream, password_hasher, password_verify
+from utils import stream_delivery, iostats, running_ps, established_connections, visitor_info, host_info_async, ps_stream, io_stream, password_hasher, password_verify
 from datetime import timedelta, datetime, timezone
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi.concurrency import run_in_threadpool
 import jwt
 from jwt.exceptions import InvalidTokenError
 from pydantic import EmailStr
 import os
-import base64
 from sqlmodel import SQLModel
 import schemas
 import logging
@@ -56,10 +56,21 @@ async def get_current_user(access_token: str = Cookie(None)):
 
 
 @app.on_event("startup")
-def on_startup():
-    if database_check():
-        with temp_sync_engine.begin() as conn:
+async def on_startup():
+    if await database_check():
+        async with temp_sync_engine.begin() as conn:
             conn.run_sync(SQLModel.metadata.create_all)
+    app.state.iostat_task = asyncio.create_task(
+        io_stream(script="./scripts/iostat_logger.sh"))
+    app.state.ps_task = asyncio.create_task(
+        ps_stream(script="./scripts/ps_logger.sh"))
+    logger.info(f' System metrics streaming started...')
+
+
+@app.on_event("shutdown")
+async def shutdown_async():
+    app.state.iostat_task.cancel()
+    app.state.ps_task.cancel()
 
 
 @app.get("/", response_class=HTMLResponse, response_model=None)
@@ -67,7 +78,7 @@ async def home(request: Request):
     return templates.TemplateResponse("home.html", {"request": request})
 
 
-@app.post("/login", response_class=JSONResponse, response_model=None)
+@app.post("/login")
 async def login(request: Request, response: Response,
                 form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
                 session: SessionDep) -> RedirectResponse:
@@ -148,13 +159,13 @@ async def host_status() -> dict:
 
 
 @app.get("/iostat-stream")
-async def iostat_stream() -> dict:
-    return StreamingResponse(io_stream(script="./scripts/iostat_logger.sh"), media_type="text/event-stream")
+async def iostat_stream() -> StreamingResponse:
+    return StreamingResponse(stream_delivery(data_stream=iostats), media_type="text/event-stream")
 
 
 @app.get("/process-stream")
 async def process_stream() -> dict:
-    return StreamingResponse(ps_stream(script="./scripts/ps_logger.sh"), media_type="text/event-stream")
+    return StreamingResponse(stream_delivery(data_stream=running_ps), media_type="text/event-stream")
 
 
 ##### OAUTH2 #######################################################################################

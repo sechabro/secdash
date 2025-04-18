@@ -22,13 +22,15 @@ TEMP_SYNC_DB_URL = f"postgresql://aberdeen:{abpwd}@localhost:5432/secdash"
 temp_sync_engine = create_engine(TEMP_SYNC_DB_URL, echo=True)
 
 
-def database_check():
-    if not database_exists(temp_sync_engine.url):
-        create_database(temp_sync_engine.url)
-        logger.info(f' Database successfully created...')
-        return True
-    logger.info(f' Database already exists...')
-    return False
+async def database_check() -> bool:
+    def sync_db_check() -> bool:
+        if not database_exists(temp_sync_engine.url):
+            create_database(temp_sync_engine.url)
+            logger.info(f' Database successfully created...\n')
+            return True
+        logger.info(f' Database already exists...')
+        return False
+    return await run_in_threadpool(sync_db_check)
 ############################################################################
 ############################################################################
 ############################################################################
