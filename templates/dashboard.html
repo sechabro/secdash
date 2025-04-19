@@ -75,53 +75,132 @@
             max-height: 500px;
             padding: 10px 1rem;
         }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background-color: #1f2937;
+            color: white;
+            overflow-x: hidden;
+            transition: width 0.3s ease;
+            z-index: 1000;
+            padding-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .sidebar.closed {
+            width: 60px;
+        }
+
+        .sidebar.open {
+            width: 200px;
+        }
+
+        .sidebar-header {
+            width: 100%;
+            text-align: left;
+            padding-left: 16px;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .sidebar-content {
+            width: 100%;
+            display: none;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .sidebar.open .sidebar-content {
+            display: block;
+        }
+
+        .sidebar button {
+            background-color: #00adee;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-top: 10px;
+            align-self: flex-start;
+        }
+
+        .main-content {
+            transition: margin-left 0.3s ease;
+            margin-left: 60px;
+            /* same as collapsed sidebar width */
+        }
+
+        .sidebar.open~.main-content {
+            margin-left: 200px;
+            /* same as expanded sidebar width */
+        }
     </style>
 </head>
 
 <body>
-    <div class="tabs">
-        <div class="tab active" onclick="showTab('visitor')">閲覧者情報</div>
-        <div class="tab" onclick="showTab('connections')">外部接続</div>
-        <div class="tab" onclick="showTab('host')">ホスト状況</div>
-        <div class="tab" onclick="showTab('processes')">サーバ側の処理</div>
-    </div>
-
-    <div id="visitor" class="content active">
-        <pre id="visitor-data"></pre>
-        <button class="collapsible">隠す・出す IPDB情報</button>
-        <div class="collapsible-content">
-            <pre id="ipdb-data"></pre>
+    <div id="sidebar" class="sidebar closed">
+        <div class="sidebar-header">
+            <span id="toggle-btn">&#9776;</span> <!-- hamburger -->
+        </div>
+        <div class="sidebar-content">
+            <p>Hi, {{ user }}</p>
+            <form action="/logout" method="get">
+                <button type="submit">Logout</button>
+            </form>
         </div>
     </div>
+    <!-- NEW WRAPPER -->
+    <div id="main-content" class="main-content">
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('visitor')">閲覧者情報</div>
+            <div class="tab" onclick="showTab('connections')">外部接続</div>
+            <div class="tab" onclick="showTab('host')">ホスト状況</div>
+            <div class="tab" onclick="showTab('processes')">サーバ側の処理</div>
+        </div>
 
-    <div id="connections" class="content">
-        <table id="connections-table">
-            <thead>
-                <tr>
-                    <th>cmd</th>
-                    <th>pid</th>
-                    <th>user</th>
-                    <th>fd</th>
-                    <th>type</th>
-                    <th>device</th>
-                    <th>size/off</th>
-                    <th>node</th>
-                    <th>address</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
+        <div id="visitor" class="content active">
+            <pre id="visitor-data"></pre>
+            <button class="collapsible">隠す・出す IPDB情報</button>
+            <div class="collapsible-content">
+                <pre id="ipdb-data"></pre>
+            </div>
+        </div>
 
-    <div id="host" class="content">
-        <pre id="host-status"></pre>
-        <h2>サーバ入出力のリアルタイムデーター (1秒ごと)</h2>
-        <pre id="iostat-data"></pre>
-    </div>
+        <div id="connections" class="content">
+            <table id="connections-table">
+                <thead>
+                    <tr>
+                        <th>cmd</th>
+                        <th>pid</th>
+                        <th>user</th>
+                        <th>fd</th>
+                        <th>type</th>
+                        <th>device</th>
+                        <th>size/off</th>
+                        <th>node</th>
+                        <th>address</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
 
-    <div id="processes" class="content">
-        <h2>サーバ側のリアルタイムビューアー (1秒ごと)</h2>
-        <pre id="process-data">Processing List-Out</pre>
+        <div id="host" class="content">
+            <pre id="host-status"></pre>
+            <h2>サーバ入出力のリアルタイムデーター (1秒ごと)</h2>
+            <pre id="iostat-data"></pre>
+        </div>
+
+        <div id="processes" class="content">
+            <h2>サーバ側のリアルタイムビューアー (1秒ごと)</h2>
+            <pre id="process-data">Processing List-Out</pre>
+        </div>
     </div>
     <script>
         async function fetchHostStatus() {
@@ -227,7 +306,14 @@
         }
 
         ////////////////////////////////////////////////////////////////////////
+        // SIDEBAR FUNCTIONALITY
+        const toggleBtn = document.getElementById('toggle-btn');
+        const sidebar = document.getElementById('sidebar');
 
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            sidebar.classList.toggle('closed');
+        });
         // ON START TRIGGERS
         fetchVisitorData();
     </script>

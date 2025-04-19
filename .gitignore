@@ -178,3 +178,6 @@ cython_debug/
 
 # VSCode configs
 .vscode
+
+# NPM-related
+node_modules/

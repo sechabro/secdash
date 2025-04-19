@@ -37,7 +37,9 @@ async def get_current_user(access_token: str = Cookie(None)):
         logger.info(f' \n\n access token is None for some reason...\n\n')
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            access_token, SECRET_KEY, algorithms=[ALGORITHM]
+        )
         username: str = payload.get("sub")
         if username is None:
             logger.info(
@@ -96,8 +98,12 @@ async def login(request: Request, response: Response,
         )
 
     # if user is authenticated, we'll build out the token, and prepare the redirect to /dashboard.
-    token_response = await token(email=form_data.username, session=session, response=response)
-    redirect_response = RedirectResponse(url="/dashboard", status_code=303)
+    token_response = await token(email=form_data.username,
+                                 session=session,
+                                 response=response)
+    redirect_response = RedirectResponse(
+        url="/dashboard", status_code=303
+    )
 
     # before the redirect, we need to grab our "set-cookie" list from token response. that's where the token lives.
     set_cookie_headers = token_response.headers.getlist("set-cookie")
@@ -108,6 +114,18 @@ async def login(request: Request, response: Response,
 
     # after, we can safely return the redirect response.
     return redirect_response
+
+
+@app.get("/logout")
+def logout():
+    response = RedirectResponse(url="/", status_code=303)
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        secure=False,  # <- change to True before pushing to production
+        samesite="strict"
+    )
+    return response
 
 
 @app.post("/register", response_class=HTMLResponse, response_model=schemas.User)
@@ -140,31 +158,32 @@ async def registered(request: Request, username: str, session: SessionDep):
 
 @app.get("/dashboard", response_class=HTMLResponse, response_model=None)
 async def dashboard(request: Request, session: SessionDep, current_user: str = Depends(get_current_user)):
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+
+    return templates.TemplateResponse("dashboard.html", {"request": request, "user": current_user})
 
 
 @app.get("/visitor")
-async def visitor(request: Request, session: SessionDep) -> dict:
+async def visitor(request: Request, session: SessionDep, current_user: str = Depends(get_current_user)) -> dict:
     return await visitor_info(request=request, session=session)
 
 
 @app.get("/connections")
-async def connections() -> list:
+async def connections(current_user: str = Depends(get_current_user)) -> list:
     return await established_connections()
 
 
 @app.get("/host")
-async def host_status() -> dict:
+async def host_status(current_user: str = Depends(get_current_user)) -> dict:
     return await host_info_async()
 
 
 @app.get("/iostat-stream")
-async def iostat_stream() -> StreamingResponse:
+async def iostat_stream(current_user: str = Depends(get_current_user)) -> StreamingResponse:
     return StreamingResponse(stream_delivery(data_stream=iostats), media_type="text/event-stream")
 
 
 @app.get("/process-stream")
-async def process_stream() -> dict:
+async def process_stream(current_user: str = Depends(get_current_user)) -> StreamingResponse:
     return StreamingResponse(stream_delivery(data_stream=running_ps), media_type="text/event-stream")
 
 

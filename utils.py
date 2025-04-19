@@ -179,7 +179,8 @@ async def visitor_info(request: Request, session: Session) -> dict:
     client_ip = request.client.host
     client_port = request.client.port
     if client_ip in ("127.0.0.1", "::1"):
-        # This is FAKE record generation, and temporary for dev and pre-population purposes only.
+        ###### This is FAKE record generation, and temporary for dev and #
+        ###### pre-population purposes only. #############################
         fake_info = generate_fake_visitor_record_for_date()
         visitor = Visitor(
             timestamp=fake_info.get("timestamp"),
@@ -193,7 +194,8 @@ async def visitor_info(request: Request, session: Session) -> dict:
         )
         info_post = await visitor_info_post(session=session, item=visitor)
         return info_post.model_dump()
-
+        #################################################################
+        #################################################################
     # Get the timestamp of the request
     timestamp = datetime.now().isoformat()
 
