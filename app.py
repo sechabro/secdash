@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Response, Form, HTTPException, Depends, status, Cookie
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="templates")
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 app = FastAPI()
+app.mount("/js", StaticFiles(directory="js"), name="js")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 

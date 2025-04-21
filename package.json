@@ -1,9 +1,11 @@
 {
-  "name": "visitor_data",
+  "name": "secdash",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "esbuild js/index.js --bundle --outfile=js/bundle.js --minify",
+    "watch": "esbuild js/index.js --bundle --outfile=js/bundle.js --watch"
   },
   "keywords": [],
   "author": "",
@@ -11,5 +13,8 @@
   "description": "",
   "dependencies": {
     "chart.js": "^4.4.9"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.2"
   }
 }
