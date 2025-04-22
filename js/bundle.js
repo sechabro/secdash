@@ -14370,7 +14370,9 @@
   document.addEventListener("DOMContentLoaded", () => {
     const ioCtx = document.getElementById("ioChart")?.getContext("2d");
     const cpuCtx = document.getElementById("cpuChart")?.getContext("2d");
-    if (!ioCtx || !cpuCtx) {
+    const diskOpsCtx = document.getElementById("diskOpsChart")?.getContext("2d");
+    const loadCtx = document.getElementById("loadChart")?.getContext("2d");
+    if (!ioCtx || !cpuCtx || !diskOpsCtx || !loadCtx) {
       console.warn("Canvas elements not found");
       return;
     }
@@ -14387,7 +14389,23 @@
           }
         ]
       },
-      options: { responsive: true, animation: false }
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 16 / 9,
+        interaction: {
+          mode: "nearest",
+          intersect: false
+        },
+        scales: {
+          x: {
+            title: { display: true, text: "Time" }
+          },
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
     });
     window.cpuChart = new auto_default(cpuCtx, {
       type: "line",
@@ -14414,7 +14432,105 @@
           }
         ]
       },
-      options: { responsive: true, animation: false }
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 16 / 9,
+        interaction: {
+          mode: "nearest",
+          intersect: false
+        },
+        scales: {
+          x: {
+            title: { display: true, text: "Time" }
+          },
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    });
+    window.diskOpsChart = new auto_default(diskOpsCtx, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Kilobytes per Transfer (KB/t) - Left",
+            data: [],
+            borderColor: "#10b981",
+            fill: false,
+            yAxisID: "y"
+          },
+          {
+            label: "Transactions per Second (TPS) - Right",
+            data: [],
+            borderColor: "#ef4444",
+            fill: false,
+            yAxisID: "y1"
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 16 / 9,
+        interaction: {
+          mode: "index",
+          intersect: false
+        },
+        stacked: false,
+        scales: {
+          x: {
+            title: { display: true, text: "Time" }
+          },
+          y: {
+            type: "linear",
+            position: "left"
+          },
+          y1: {
+            type: "linear",
+            position: "right",
+            grid: {
+              drawOnChartArea: false
+            }
+          }
+        }
+      }
+    });
+    window.loadChart = new auto_default(loadCtx, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "1 Min Load Avg.",
+            data: [],
+            borderColor: "#f59e0b",
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 16 / 9,
+        interaction: {
+          mode: "nearest",
+          intersect: false
+        },
+        scales: {
+          x: {
+            title: { display: true, text: "Time" }
+          },
+          y: {
+            beginAtZero: true,
+            grid: {
+              drawOnChartArea: false
+            }
+          }
+        }
+      }
     });
   });
 })();

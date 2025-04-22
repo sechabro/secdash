@@ -113,11 +113,15 @@ async def run_script(script: str | None = None):
 ####################### UNIVERSAL STREAM DELIVERY SERVICE #####################
 
 
-async def stream_delivery(data_stream: deque):
+async def stream_delivery(data_stream: deque,
+                          sort: bool | None = False,
+                          key: str | None = None):
     old_snapshot = []
     while True:
         await asyncio.sleep(1)
         new_snapshot = list(data_stream)
+        if sort and key:  # <--- neither value can be falsy
+            new_snapshot.sort(key=lambda item: item.get(key, ""))
         if new_snapshot != old_snapshot:
             yield f"data: {json.dumps(new_snapshot)}\n\n"
             old_snapshot = new_snapshot

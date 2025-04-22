@@ -145,23 +145,21 @@
 
         #iostat-canvas-container {
             display: flex;
-            justify-content: flex-start;
+            flex-wrap: wrap;
+            justify-content: space-between;
             width: 100%;
-            max-width: 800px;
             box-sizing: border-box;
             padding: 1rem;
         }
 
-        #ioChart {
-            width: auto;
-            height: auto;
+        #iostat-canvas-container canvas {
+            flex: 1 1 0;
+            max-width: 48%;
+            width: 100% !important;
+            height: auto !important;
             display: block;
-        }
-
-        #cpuChart {
-            width: auto;
-            height: auto;
-            display: block;
+            margin: 0 0.5rem;
+            aspect-ratio: 16 / 9;
         }
 
         #host-status {
@@ -249,8 +247,9 @@
             <div id="iostat-canvas-container">
                 <canvas id="ioChart"></canvas>
                 <canvas id="cpuChart"></canvas>
+                <canvas id="diskOpsChart"></canvas>
+                <canvas id="loadChart"></canvas>
             </div>
-            <!-- <pre id="iostat-data"></pre> -->
         </div>
 
         <div id="processes" class="content">
@@ -337,19 +336,27 @@
 
             iostatEventSource.onmessage = function (event) {
                 const readings = JSON.parse(event.data);
-                if (!window.ioChart || !window.cpuChart) return;
+                if (!window.ioChart || !window.cpuChart || !window.diskOpsChart || !window.loadChart) return;
 
-                // Reset both charts
+                // Reset  charts
                 ioChart.data.labels = [];
                 ioChart.data.datasets[0].data = [];
 
                 cpuChart.data.labels = [];
                 cpuChart.data.datasets.forEach(ds => ds.data = []);
 
+                diskOpsChart.data.labels = [];
+                diskOpsChart.data.datasets.forEach(ds => ds.data = []);
+
+                loadChart.data.labels = [];
+                loadChart.data.datasets[0].data = [];
+
                 readings.forEach(data => {
                     // Shared label (time)
                     ioChart.data.labels.push(data.time);
                     cpuChart.data.labels.push(data.time);
+                    diskOpsChart.data.labels.push(data.time);
+                    loadChart.data.labels.push(data.time);
 
                     // IO chart
                     ioChart.data.datasets[0].data.push(parseFloat(data.mbs));
@@ -358,10 +365,19 @@
                     cpuChart.data.datasets[0].data.push(parseFloat(data.idle));
                     cpuChart.data.datasets[1].data.push(parseFloat(data.user));
                     cpuChart.data.datasets[2].data.push(parseFloat(data.sys));
+
+                    // DISK OPS chart
+                    diskOpsChart.data.datasets[0].data.push(parseFloat(data.kbt));
+                    diskOpsChart.data.datasets[1].data.push(parseInt(data.tps));
+
+                    // LOAD chart
+                    loadChart.data.datasets[0].data.push(parseFloat(data.load_avg_1m));
                 });
 
                 ioChart.update();
                 cpuChart.update();
+                diskOpsChart.update();
+                loadChart.update();
             };
         });
 
