@@ -189,6 +189,70 @@
             text-align: center;
             align-self: center;
         }
+
+        .user-card {
+            background-color: #1f2937;
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            margin-bottom: 24px;
+            transition: box-shadow 0.3s ease;
+            position: relative;
+
+            /* Subtle light gradient for 3D effect */
+            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
+            background-blend-mode: hard-light;
+        }
+
+        .user-card:hover {
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        .user-card table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .user-card table>thead>tr>th {
+            background-color: #00adee !important;
+            color: white !important;
+        }
+
+        .user-card th,
+        .user-card td {
+            padding: 6px;
+            border: none;
+        }
+
+        .user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+        }
+
+        .user-header h3 {
+            font-size: 1.25rem;
+            margin: 0;
+        }
+
+        .user-header p {
+            font-size: 0.95rem;
+            color: #d1d5db;
+            margin: 0;
+        }
+
+        .table-container {
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            /* visible border that hugs the radius */
+            margin-top: 12px;
+        }
     </style>
 </head>
 
@@ -254,7 +318,8 @@
 
         <div id="processes" class="content">
             <h2>サーバ側のリアルタイムビューアー (1秒ごと)</h2>
-            <pre id="process-data">Processing List-Out</pre>
+            <div id="process-container" class="process-grid"></div>
+            <!--<pre id="process-data">Processing List-Out</pre>-->
         </div>
     </div>
     <script src="/js/bundle.js"></script>
@@ -382,15 +447,80 @@
         });
 
         // SSE for process streaming
-        const processEventSource = new EventSource("/process-stream");
-        processEventSource.onmessage = function (event) {
-            const ps = JSON.parse(event.data);  // An array of process records
-            const processes = ps.map(data =>
-                `date: ${data.date}, time: ${data.time}, user: ${data.user}, pid: ${data.pid}, cpu_pct: ${data.cpu_pct}, mem_pct: ${data.mem_pct}, vsz_kb: ${data.vsz_kb}, rss_kb: ${data.rss_kb}, tty: ${data.tty}, stat: ${data.stat}, start: ${data.start}, cpu_time: ${data.cpu_time}, command: ${data.command}`
-            ).join('\n');
-            document.getElementById("process-data").innerText = processes;
+        const evtSource = new EventSource("/process-stream");
+
+        evtSource.onmessage = function (event) {
+            const data = JSON.parse(event.data);
+            renderGroupedProcesses(data);
         };
 
+        function renderGroupedProcesses(data) {
+            const container = document.getElementById("process-container");
+            const openDropdowns = new Set(
+                Array.from(container.querySelectorAll("details[open]"))
+                    .map(details => details.getAttribute("data-ppidkey"))
+            );
+            container.innerHTML = "";
+
+            data.forEach(userGroup => {
+                const user = Object.keys(userGroup)[0];
+                const ppidData = userGroup[user];
+                const card = document.createElement("div");
+                card.classList.add("user-card");
+
+                // Header
+                const header = document.createElement("div");
+                header.classList.add("user-header");
+                header.innerHTML = `<h3>User: ${user}</h3><p>PPIDs: ${Object.keys(ppidData).length}</p>`;
+                card.appendChild(header);
+
+                // PPID dropdowns
+                for (const ppid in ppidData) {
+                    const ppidKey = `${user}-${ppid}`; // Unique key for this dropdown
+
+                    const toggle = document.createElement("details");
+                    toggle.classList.add("ppid-dropdown");
+                    toggle.setAttribute("data-ppidkey", ppidKey);
+
+                    if (openDropdowns.has(ppidKey)) {
+                        toggle.setAttribute("open", "");
+                    }
+
+                    const summary = document.createElement("summary");
+                    summary.textContent = `PPID: ${ppid} (${ppidData[ppid].length} child processes)`;
+                    toggle.appendChild(summary);
+
+                    const tableContainer = document.createElement("div");
+                    tableContainer.classList.add("table-container");
+
+                    const table = document.createElement("table");
+                    table.innerHTML = `
+                        <thead>
+                            <tr><th>PID</th><th>STAT</th><th>CMD</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    `;
+
+                    const tbody = table.querySelector("tbody");
+
+                    ppidData[ppid].forEach(proc => {
+                        const row = document.createElement("tr");
+                        row.innerHTML = `
+                            <td>${proc.pid}</td>
+                            <td>${proc.stat}</td>
+                            <td>${proc.command}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                    tableContainer.appendChild(table);
+                    toggle.appendChild(tableContainer);
+                    card.appendChild(toggle);
+                }
+
+                container.appendChild(card);
+            });
+
+        }
         ////////////////////////////////////////////////////////////////////////
 
         // UI HANDLING

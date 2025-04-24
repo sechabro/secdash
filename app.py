@@ -181,12 +181,21 @@ async def host_status(current_user: str = Depends(get_current_user)) -> dict:
 
 @app.get("/iostat-stream")
 async def iostat_stream(current_user: str = Depends(get_current_user)) -> StreamingResponse:
-    return StreamingResponse(stream_delivery(data_stream=iostats), media_type="text/event-stream")
+    return StreamingResponse(
+        stream_delivery(data_stream=iostats),
+        media_type="text/event-stream"
+    )
 
 
 @app.get("/process-stream")
 async def process_stream(current_user: str = Depends(get_current_user)) -> StreamingResponse:
-    return StreamingResponse(stream_delivery(data_stream=running_ps, sort=True, key="user"), media_type="text/event-stream")
+    return StreamingResponse(
+        stream_delivery(
+            data_stream=running_ps,
+            group="ps"
+        ),
+        media_type="text/event-stream"
+    )
 
 
 ##### OAUTH2 #######################################################################################

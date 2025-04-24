@@ -19,6 +19,7 @@ import time
 import httpx
 import asyncio
 from collections import deque
+import threading
 from sqlmodel import Session
 from crud import visitor_info_post, get_user_by_email
 import logging
@@ -32,7 +33,8 @@ IPDB = str(os.getenv('IPDB', default=None))
 
 # Datastreams
 iostats = deque(maxlen=30)
-running_ps = deque(maxlen=45)
+running_ps = deque()
+ps_lock = threading.Lock()
 
 
 def block_ip(ip):
@@ -113,15 +115,21 @@ async def run_script(script: str | None = None):
 ####################### UNIVERSAL STREAM DELIVERY SERVICE #####################
 
 
-async def stream_delivery(data_stream: deque,
-                          sort: bool | None = False,
-                          key: str | None = None):
+async def stream_delivery(
+    data_stream: deque,
+    sort: bool | None = False,
+    key: str | None = None,
+    group: str | None = None
+):
     old_snapshot = []
     while True:
         await asyncio.sleep(1)
         new_snapshot = list(data_stream)
         if sort and key:  # <--- neither value can be falsy
             new_snapshot.sort(key=lambda item: item.get(key, ""))
+        elif group:  # <--- same here
+            ps_grouping_snapshot = list(data_stream)
+            new_snapshot = await ps_stream_grouping(items=ps_grouping_snapshot)
         if new_snapshot != old_snapshot:
             yield f"data: {json.dumps(new_snapshot)}\n\n"
             old_snapshot = new_snapshot
@@ -132,24 +140,44 @@ async def stream_delivery(data_stream: deque,
 ####################### STREAM ################################################
 
 
+async def ps_stream_grouping(items: list) -> list:
+    return_dict = {}
+    for item in items:
+        user = item.get("user")
+        ppid = item.get("ppid")
+        if not return_dict.get(user):
+            return_dict.update({user: {}})
+        if not return_dict[user].get(ppid):
+            return_dict[user][ppid] = []
+        return_dict[user][ppid].append(item)
+    return [{user: data} for user, data in return_dict.items()]
+
+
 async def ps_stream(script: str | None = None):
+    global running_ps
     processes = await run_script(script=script)
+
     try:
+        ps_deque_swap = deque()
         async for line in processes.stdout:
             line_strip = line.decode().strip()
             if line_strip == "END":
-                if running_ps:
-                    continue
+                if ps_deque_swap:
+                    with ps_lock:
+                        running_ps.clear()
+                        running_ps.extend(ps_deque_swap)
+                    ps_deque_swap.clear()
             else:
-                running_ps.append(
+                ps_deque_swap.append(
                     dict(
                         zip(
-                            ["date", "time", "user", "pid", "cpu_pct", "mem_pct", "vsz_kb",
-                                "rss_kb", "tty", "stat", "start", "cpu_time", "command"],
+                            ["timestamp", "pid", "ppid", "user", "cpu_pct", "stat",
+                                "start", "time", "command"],
                             line.decode().strip().split(",")
                         )
                     )
                 )
+
     except KeyboardInterrupt:
         print("Stopping...")
         processes.terminate()
