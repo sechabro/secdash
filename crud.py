@@ -36,3 +36,39 @@ async def register_user(session: AsyncSession, user: schemas.UserReg) -> schemas
     await session.refresh(new_user)
     logger.info(f' New user created successfully at {regdate}.')
     return user
+
+
+async def get_visitors(session: AsyncSession) -> list[schemas.VisitorInMem]:
+    result = await session.execute(select(schemas.Visitor))
+    visitors = result.scalars().all()
+
+    return [
+        schemas.VisitorInMem(
+            v.username, v.acct_created, v.ip, v.port, v.device_info,
+            v.browser_info, v.is_bot, v.geo_info,
+            v.ipdb.get("isTor", 0),  # lean structure
+            v.last_active, v.time_idle, v.is_active
+        )
+        for v in visitors
+    ]
+
+
+async def shutdown_db_update(session: AsyncSession, visitor_list: list) -> bool:
+    try:
+        for visitor in visitor_list:
+            stmt = (
+                update(schemas.Visitor)
+                .where(schemas.Visitor.username == visitor.username)
+                .values(
+                    is_active=visitor.is_active,
+                    last_active=visitor.last_active,
+                    time_idle=visitor.time_idle
+                )
+            )
+            await session.execute(stmt)
+
+        await session.commit()
+        return True
+    except Exception:
+        logger.exception("Failed to update database on shutdown.")
+        return False

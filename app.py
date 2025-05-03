@@ -1,11 +1,11 @@
-from fastapi import FastAPI, Request, Response, Form, HTTPException, Depends, status, Cookie
-from typing import Annotated
+from fastapi import FastAPI, Request, Response, Form, Query, HTTPException, Depends, status, Cookie
+from typing import Annotated, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
-from utils import stream_delivery, iostats, running_ps, established_connections, visitor_info, host_info_async, ps_stream, io_stream, password_hasher, password_verify
+from utils import stream_delivery, persist_visitors, iostats, running_ps, visitors, established_connections, visitor_stream, host_info_async, ps_stream, io_stream, password_hasher, password_verify, visitor_activity_gen
 from datetime import timedelta, datetime, timezone
 import asyncio
 from contextlib import asynccontextmanager
@@ -14,11 +14,10 @@ import jwt
 from jwt.exceptions import InvalidTokenError
 from pydantic import EmailStr
 import os
-from sqlmodel import SQLModel
 import schemas
 import logging
 import crud
-from database import temp_sync_engine, database_check, get_session
+from database import temp_sync_engine, async_session_maker, database_check, create_tables, get_session
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -62,19 +61,29 @@ async def get_current_user(access_token: str = Cookie(None)):
 @app.on_event("startup")
 async def on_startup():
     if await database_check():
-        async with temp_sync_engine.begin() as conn:
-            conn.run_sync(SQLModel.metadata.create_all)
+        logger.info(f' Database successfully created...\n')
+    else:
+        logger.info(f' Database already exists... Checking tables...')
+    if await create_tables():
+        logger.info(f' Table check successful.')
     app.state.iostat_task = asyncio.create_task(
         io_stream(script="./scripts/iostat_logger.sh"))
     app.state.ps_task = asyncio.create_task(
         ps_stream(script="./scripts/ps_logger.sh"))
     logger.info(f' System metrics streaming started...')
+    app.state.visitor_task = asyncio.create_task(
+        visitor_activity_gen())
+    logger.info(f' Simulating user activity.')
 
 
 @app.on_event("shutdown")
 async def shutdown_async():
     app.state.iostat_task.cancel()
     app.state.ps_task.cancel()
+    data_persist = await persist_visitors()
+    if not data_persist:
+        logger.info(f' DB update failed. Shutting down sadly...')
+    app.state.visitor_task.cancel()
 
 
 @app.get("/", response_class=HTMLResponse, response_model=None)
@@ -164,11 +173,6 @@ async def dashboard(request: Request, session: SessionDep, current_user: str = D
     return templates.TemplateResponse("dashboard.html", {"request": request, "user": current_user})
 
 
-@app.get("/visitor")
-async def visitor(request: Request, session: SessionDep, current_user: str = Depends(get_current_user)) -> dict:
-    return await visitor_info(request=request, session=session)
-
-
 @app.get("/connections")
 async def connections(current_user: str = Depends(get_current_user)) -> list:
     return await established_connections()
@@ -177,6 +181,31 @@ async def connections(current_user: str = Depends(get_current_user)) -> list:
 @app.get("/host")
 async def host_status(current_user: str = Depends(get_current_user)) -> dict:
     return await host_info_async()
+
+
+@app.get("/visitors")
+async def visitor(
+    request: Request,
+    session: SessionDep,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=9, ge=1, le=100),
+    filter_field: str = Query(default="is_active"),
+    filter_param: str = Query(default="true"),
+
+    current_user: str = Depends(get_current_user)
+):
+    return StreamingResponse(
+        stream_delivery(
+            data_stream=visitors,
+            sort=True,
+            key="username",
+            filter_field=filter_field,
+            filter_param=filter_param,
+            # page=page,
+            # limit=limit
+        ),
+        media_type="text/event-stream"
+    )
 
 
 @app.get("/iostat-stream")

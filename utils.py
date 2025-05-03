@@ -1,7 +1,10 @@
 import json
 import subprocess
 from functools import reduce
+import random
+from database import async_session_maker
 import smtplib
+from sqlalchemy.ext.asyncio import AsyncSession
 from geoip2 import webservice, database, errors
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -10,7 +13,7 @@ from fastapi.concurrency import run_in_threadpool
 from datetime import datetime
 from user_agents import parse
 from schemas import Visitor, IOStatLine
-from data_generator import generate_fake_visitor_record_for_date
+from data_generation.data_generator import generate_fake_visitor_record_for_date
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
 import os
@@ -19,9 +22,13 @@ import time
 import httpx
 import asyncio
 from collections import deque
+from typing import Any
 import threading
 from sqlmodel import Session
-from crud import visitor_info_post, get_user_by_email
+from crud import visitor_info_post, get_user_by_email, get_visitors, shutdown_db_update
+from pympler import asizeof
+from collections import defaultdict
+from dataclasses import fields, asdict, is_dataclass
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,7 +41,9 @@ IPDB = str(os.getenv('IPDB', default=None))
 # Datastreams
 iostats = deque(maxlen=30)
 running_ps = deque()
+visitors = deque()
 ps_lock = threading.Lock()
+visitor_lock = threading.Lock()
 
 
 def block_ip(ip):
@@ -115,23 +124,60 @@ async def run_script(script: str | None = None):
 ####################### UNIVERSAL STREAM DELIVERY SERVICE #####################
 
 
+def get_field_value(item: Any, field: str):
+    """Universal accessor for both dicts and dataclasses."""
+    if isinstance(item, dict):
+        return item.get(field, None)
+    elif is_dataclass(item):
+        return getattr(item, field, None)
+    return None
+
+
+def serialize(item: Any):
+    """Universal serializer for dicts and dataclasses."""
+    if is_dataclass(item):
+        return asdict(item)
+    return item  # assuming it's already a dict
+
+
 async def stream_delivery(
     data_stream: deque,
     sort: bool | None = False,
     key: str | None = None,
-    group: str | None = None
+    group: str | None = None,
+    filter_field: str | None = None,
+    filter_param: str | None = None
 ):
     old_snapshot = []
     while True:
         await asyncio.sleep(1)
         new_snapshot = list(data_stream)
-        if sort and key:  # <--- neither value can be falsy
-            new_snapshot.sort(key=lambda item: item.get(key, ""))
-        elif group:  # <--- same here
+
+        # Sorting
+        if sort and key:
+            new_snapshot.sort(
+                key=lambda item: get_field_value(item, key) or "")
+
+        # Filtering
+        if filter_field and filter_param is not None:
+            if isinstance(filter_param, str) and filter_param.lower() in ("true", "false"):
+                filter_param = filter_param.lower() == "true"
+
+            new_snapshot = [
+                item for item in new_snapshot
+                if get_field_value(item, filter_field) == filter_param
+            ]
+
+        # Grouping
+        elif group:
             ps_grouping_snapshot = list(data_stream)
             new_snapshot = await ps_stream_grouping(items=ps_grouping_snapshot)
+
         if new_snapshot != old_snapshot:
-            yield f"data: {json.dumps(new_snapshot)}\n\n"
+            is_dc = is_dataclass(new_snapshot[0]) if new_snapshot else False
+            serialized = [
+                asdict(item) if is_dc else item for item in new_snapshot]
+            yield f"data: {json.dumps(serialized)}\n\n"
             old_snapshot = new_snapshot
 
 ###############################################################################
@@ -201,12 +247,109 @@ async def io_stream(script: str | None = None):
         print("Stopping...")
         iostat_data.terminate()
 
-################################################################
-################################################################
-################################################################
+
+####### VISITOR ################################################
+######## ACTIVITY ##############################################
+########## GENERATION ##########################################
+# This data is designed to mimic the logging in, logging out,
+# idle time, active time, and session activity of users to a site
+# that SecDash is tasked with monitoring. For now, this data is
+# generated for demo purposes. Abuse IPDB data is also generated,
+# to avoid potential issues with over-calling their api in short-
+# timespans.
+
+async def visitor_stream(visitor_list: list | None = None):
+    global visitors
+    try:
+        visitor_deque_swap = deque()
+        async for visitor in visitor_list:
+            visitor_deque_swap.append(visitor)
+            if visitor_deque_swap:
+                with visitor_lock:
+                    visitors.clear()
+                    visitors.extend(visitor_deque_swap)
+                visitor_deque_swap.clear()
+    except KeyboardInterrupt:
+        print("Stopping...")
 
 
-async def visitor_info(request: Request, session: Session) -> dict:
+async def visitor_activity_gen():
+    global visitors
+    try:
+        async with async_session_maker() as session:
+            db_visitors = await get_visitors(session)
+            # logger.info(f' VISITORS: {db_visitors}\n\n')
+            active_visitors = [v for v in db_visitors if v.is_active]
+            inactive_visitors = [v for v in db_visitors if not v.is_active]
+
+            while True:
+                # Mutate the visitors
+                # Example: activate some, idle some, log out some
+                to_activate = random.sample(inactive_visitors, k=min(
+                    len(inactive_visitors), random.randint(1, 5)))
+                for visitor in to_activate:
+                    visitor.is_active = True
+                    visitor.last_active = datetime.now().isoformat()
+                    visitor.time_idle = 0
+                    active_visitors.append(visitor)
+                    inactive_visitors.remove(visitor)
+
+                for visitor in active_visitors:
+                    if random.random() < 0.7:
+                        visitor.last_active = datetime.now().isoformat()
+                        visitor.time_idle = 0
+                    else:
+                        visitor.time_idle += random.randint(10, 40)
+
+                to_logout = random.sample(active_visitors, k=min(
+                    len(active_visitors), max(1, len(active_visitors) // 20)))
+                for visitor in to_logout:
+                    visitor.is_active = False
+                    visitor.time_idle = 0
+                    inactive_visitors.append(visitor)
+                    active_visitors.remove(visitor)
+
+                # Push updated list into the global deque
+                updated_visitors = active_visitors + inactive_visitors
+                with visitor_lock:
+                    visitors.clear()
+                    visitors.extend([v for v in updated_visitors])
+                '''vis_list = list(visitors)
+                byte_syze = asizeof.asizeof(vis_list)
+                in_mb = byte_syze / (1024 * 1024)
+                logger.info(
+                    f' Total memory used by Visitor List: {byte_syze} bytes ({in_mb:.2f} MB)"')
+                # Memory used per key across all visitors
+                field_memory = defaultdict(int)
+
+                # Sum up memory usage of each field individually
+                for visitor in vis_list:
+                    for field in fields(visitor):
+                        key = field.name
+                        value = getattr(visitor, key)
+                        field_memory[key] += asizeof.asizeof(value)
+
+                # Sort and display results
+                sorted_fields = sorted(field_memory.items(),
+                                       key=lambda x: x[1], reverse=True)
+
+                logger.info("Memory usage by field (descending):")
+                for key, size in sorted_fields:
+                    logger.info(f"{key:20}: {size / 1024:.2f} KB")'''
+
+                await asyncio.sleep(random.randint(20, 40))
+    except Exception as e:
+        logger.exception(f' EXCEPTION: {e}')
+
+
+async def persist_visitors() -> bool:
+    async with async_session_maker() as session:
+        with visitor_lock:
+            updates = list(visitors)
+            shutdown_update = await shutdown_db_update(session=session, visitor_list=updates)
+            return shutdown_update
+
+'''async def visitor_stream(request: Request, session: Session) -> dict:
     # Get the visitor's IP address (you might need to adapt this for proxies)
     client_ip = request.client.host
     client_port = request.client.port
@@ -251,7 +394,7 @@ async def visitor_info(request: Request, session: Session) -> dict:
 
     # You can now process this data, store it in the database, etc.
     info_post = await visitor_info_post(db=session, item=visitor)
-    return info_post.model_dump()
+    return info_post.model_dump()'''
 
 
 async def ipabuse_check(ip: str):

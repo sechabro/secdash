@@ -2,7 +2,7 @@ from sqlmodel import SQLModel, Field, JSON, Column
 from pydantic import EmailStr
 from pydantic.types import StringConstraints
 from typing import Optional, Annotated
-
+from dataclasses import dataclass
 
 # ----------- VISITOR-RELATED CLASSES ------------
 
@@ -11,7 +11,8 @@ class Visitor(SQLModel, table=True):
     __tablename__ = "visitors"  # optional, but I want to override default 'visitor'
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    timestamp: str  # or datetime if you're storing as an actual datetime
+    username: str
+    acct_created: str  # or datetime if you're storing as an actual datetime
     ip: str
     port: str
     device_info: str
@@ -19,7 +20,25 @@ class Visitor(SQLModel, table=True):
     is_bot: bool
     geo_info: str
     ipdb: dict = Field(sa_column=Column(JSON))
+    last_active: Optional[str] = None
+    time_idle: int = 0  # measured in seconds
+    is_active: bool = False
 
+
+@dataclass(slots=True)
+class VisitorInMem():
+    username: str
+    acct_created: str
+    ip: str
+    port: str
+    device_info: str
+    browser_info: str
+    is_bot: bool
+    geo_info: str
+    ipdb: bool  # .getting "isTor" value only
+    last_active: str
+    time_idle: int
+    is_active: bool
 
 # ----------- STREAM-RELATED CLASSES ------------
 

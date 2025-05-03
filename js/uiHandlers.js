@@ -1,9 +1,9 @@
 export function initializeUIHandlers() {
     // COLLAPSIBLE HANDLER
-    document.querySelector('.collapsible').addEventListener('click', () => {
-        const content = document.querySelector('.collapsible-content');
-        content.classList.toggle('visible');
-    });
+    //document.querySelector('.collapsible').addEventListener('click', () => {
+    //    const content = document.querySelector('.collapsible-content');
+    //    content.classList.toggle('visible');
+    //})
 
     // TAB SWITCHING HANDLER
     function showTab(tabId) {
@@ -32,5 +32,7 @@ export function initializeUIHandlers() {
     // SSE STREAMS AND START TRIGGERS
     window.runWhenReady(() => window.startIostatStream());
     window.runWhenReady(() => window.startProcessStream());
-    window.runWhenReady(() => window.fetchVisitorData());
+    window.runWhenReady(() => window.startVisitorStream());
+    // show visitors tab by default:
+    showTab('visitors');
 }
