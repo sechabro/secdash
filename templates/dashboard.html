@@ -37,20 +37,44 @@
             display: block;
         }
 
-        table {
+        table.connections-table {
             width: 100%;
+            background-color: #1f2937;
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+            padding: 20px;
             border-collapse: collapse;
-            margin-top: 10px;
+            transition: box-shadow 0.3s ease;
+            position: relative;
+
+            /* Subtle light gradient for 3D effect */
+            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
+            background-blend-mode: hard-light;
+            margin: 0 auto;
         }
 
-        th,
-        td {
-            border: 1px solid #ddd;
-            padding: 6px;
+        table.connections-table th,
+        table.connections-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border: none;
+            /* Remove all grid lines */
         }
 
-        th {
-            background-color: #f2f2f2;
+        table.connections-table th {
+            background-color: #00adee;
+            color: #1f2937;
+            font-weight: bold;
+            font-size: 0.95rem;
+        }
+
+        table.connections-table thead th:first-child {
+            border-top-left-radius: 12px;
+        }
+
+        table.connections-table thead th:last-child {
+            border-top-right-radius: 12px;
         }
 
         .collapsible {
@@ -252,6 +276,7 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             /* visible border that hugs the radius */
             margin-top: 12px;
+
         }
 
         .visitor-grid {
@@ -265,7 +290,7 @@
             top: 0;
             /* placing it above all the other stuff */
             z-index: 1000;
-            background-color: #1f2937;
+            background-color: #00adee;
             color: white;
             padding: 1rem;
             border-radius: 12px;
@@ -275,6 +300,8 @@
             align-items: center;
             gap: 1rem;
             flex-wrap: wrap;
+            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
+            background-blend-mode: hard-light;
         }
 
         .visitor-query label {
@@ -282,7 +309,7 @@
         }
 
         .visitor-query select {
-            background-color: #111827;
+            background-color: #1f2937;
             color: white;
             border: 1px solid #00adee;
             padding: 6px 12px;
@@ -298,9 +325,9 @@
         }
 
         .pagination-controls button {
-            background-color: #111827;
+            background-color: #1f2937;
             color: white;
-            border: 1px solid #00adee;
+            border: 1px solid transparent;
             padding: 6px 12px;
             border-radius: 6px;
             font-size: 0.95rem;
@@ -309,8 +336,7 @@
         }
 
         .pagination-controls button:hover:not(:disabled) {
-            background-color: #00adee;
-            color: #111827;
+            border: 1px solid white;
         }
 
         .pagination-controls button:disabled {
@@ -367,7 +393,8 @@
         </div>
 
         <div id="connections" class="content">
-            <table id="connections-table">
+            <h2>サイトの外接続</h2>
+            <table class="connections-table">
                 <thead>
                     <tr>
                         <th>cmd</th>

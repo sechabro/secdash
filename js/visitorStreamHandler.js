@@ -9,11 +9,21 @@ export function startVisitorStream() {
     const filterParamSelect = document.getElementById("filter-param");
 
     filterFieldSelect.addEventListener("change", () => {
-        connectVisitorStream(filterFieldSelect.value, filterParamSelect.value);
+        document.dispatchEvent(new CustomEvent("visitor-query-changed", {
+            detail: {
+                filterField: filterFieldSelect.value,
+                filterParam: filterParamSelect.value
+            }
+        }));
     });
 
     filterParamSelect.addEventListener("change", () => {
-        connectVisitorStream(filterFieldSelect.value, filterParamSelect.value);
+        document.dispatchEvent(new CustomEvent("visitor-query-changed", {
+            detail: {
+                filterField: filterFieldSelect.value,
+                filterParam: filterParamSelect.value
+            }
+        }));
     });
 }
 

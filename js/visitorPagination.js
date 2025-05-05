@@ -8,14 +8,13 @@ export function initVisitorPagination() {
     const prevBtn = document.getElementById("prev-page");
     const nextBtn = document.getElementById("next-page");
 
-    function updateStream() {
-        const filterField = document.getElementById("filter-field").value;
-        const filterParam = document.getElementById("filter-param").value;
+    function updateStream(filterFieldOverride = null, filterParamOverride = null) {
+        const filterField = filterFieldOverride ?? document.getElementById("filter-field").value;
+        const filterParam = filterParamOverride ?? document.getElementById("filter-param").value;
 
         window.connectVisitorStream(filterField, filterParam, currentPage, limit);
 
         pageLabel.textContent = `Page ${currentPage}`;
-
         prevBtn.disabled = currentPage <= 1;
         nextBtn.disabled =
             lastKnownTotalPages !== null && currentPage >= lastKnownTotalPages;
@@ -48,5 +47,11 @@ export function initVisitorPagination() {
         nextBtn.disabled = currentPage >= lastKnownTotalPages;
     });
 
+    // Listen for query changes to reset page counter
+    document.addEventListener("visitor-query-changed", (e) => {
+        const { filterField, filterParam } = e.detail;
+        currentPage = 1;
+        updateStream(filterField, filterParam);
+    });
     updateStream(); // kick off the first page
 }
