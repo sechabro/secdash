@@ -7,8 +7,9 @@ import { startIostatStream } from "./iostatStreamHandler.js";
 import { startProcessStream } from "./processStreamHandler.js";
 import { runWhenReady } from "./runWhenReady.js";
 import { initializeUIHandlers } from "./uiHandlers.js";
-import { startVisitorStream } from './visitorStreamHandler.js';
+import { startVisitorStream, connectVisitorStream } from './visitorStreamHandler.js';
 import { renderVisitors } from './renderVisitors.js';
+import { initVisitorPagination } from './visitorPagination.js';
 export {
     fetchHostStatus,
     fetchConnectionsData,
@@ -16,9 +17,11 @@ export {
     startIostatStream,
     startProcessStream,
     startVisitorStream,
+    connectVisitorStream,
     runWhenReady,
     initializeUIHandlers,
-    renderVisitors
+    renderVisitors,
+    initVisitorPagination
 };
 
 window.fetchHostStatus = fetchHostStatus;
@@ -28,7 +31,9 @@ window.renderVisitors = renderVisitors;
 window.startIostatStream = startIostatStream;
 window.startProcessStream = startProcessStream;
 window.startVisitorStream = startVisitorStream;
+window.connectVisitorStream = connectVisitorStream;
 window.runWhenReady = runWhenReady;
 
 // ✅ Autostart the dashboard UI
 initializeUIHandlers();
+initVisitorPagination();

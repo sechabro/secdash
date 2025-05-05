@@ -201,8 +201,8 @@ async def visitor(
             key="username",
             filter_field=filter_field,
             filter_param=filter_param,
-            # page=page,
-            # limit=limit
+            page=page,
+            limit=limit
         ),
         media_type="text/event-stream"
     )

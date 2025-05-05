@@ -261,6 +261,10 @@
         }
 
         .visitor-query {
+            position: sticky;
+            top: 0;
+            /* placing it above all the other stuff */
+            z-index: 1000;
             background-color: #1f2937;
             color: white;
             padding: 1rem;
@@ -284,6 +288,34 @@
             padding: 6px 12px;
             border-radius: 6px;
             font-size: 0.95rem;
+        }
+
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+        }
+
+        .pagination-controls button {
+            background-color: #111827;
+            color: white;
+            border: 1px solid #00adee;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .pagination-controls button:hover:not(:disabled) {
+            background-color: #00adee;
+            color: #111827;
+        }
+
+        .pagination-controls button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
     </style>
 </head>
@@ -324,6 +356,12 @@
                     <option value="true">True</option>
                     <option value="false">False</option>
                 </select>
+
+                <div id="pagination-controls" class="pagination-controls">
+                    <button id="prev-page">Previous</button>
+                    <span id="page-number">Page 1</span>
+                    <button id="next-page">Next</button>
+                </div>
             </div>
             <div id="visitor-container" class="visitor-grid"></div>
         </div>

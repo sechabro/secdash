@@ -146,7 +146,9 @@ async def stream_delivery(
     key: str | None = None,
     group: str | None = None,
     filter_field: str | None = None,
-    filter_param: str | None = None
+    filter_param: str | None = None,
+    page: int | None = None,
+    limit: int | None = None
 ):
     old_snapshot = []
     while True:
@@ -173,10 +175,19 @@ async def stream_delivery(
             ps_grouping_snapshot = list(data_stream)
             new_snapshot = await ps_stream_grouping(items=ps_grouping_snapshot)
 
+        total_items = len(new_snapshot)
+        # Pagination
+        if page is not None and limit is not None:
+            start = (page - 1) * limit
+            end = start + limit
+            new_snapshot = new_snapshot[start:end]
+
         if new_snapshot != old_snapshot:
+            # needed to determine page total for frontend
             is_dc = is_dataclass(new_snapshot[0]) if new_snapshot else False
             serialized = [
                 asdict(item) if is_dc else item for item in new_snapshot]
+            yield f"event: meta\ndata: {json.dumps({'total_items': total_items})}\n\n"
             yield f"data: {json.dumps(serialized)}\n\n"
             old_snapshot = new_snapshot
 
@@ -353,24 +364,7 @@ async def persist_visitors() -> bool:
     # Get the visitor's IP address (you might need to adapt this for proxies)
     client_ip = request.client.host
     client_port = request.client.port
-    if client_ip in ("127.0.0.1", "::1"):
-        ###### This is FAKE record generation, and temporary for dev and #
-        ###### pre-population purposes only. #############################
-        fake_info = generate_fake_visitor_record_for_date()
-        visitor = Visitor(
-            timestamp=fake_info.get("timestamp"),
-            ip=fake_info.get("ip"),
-            port=str(fake_info.get("port")),
-            device_info=fake_info.get("device_info"),
-            browser_info=fake_info.get("browser_info"),
-            is_bot=fake_info.get("is_bot"),
-            geo_info=fake_info.get("geo_info"),
-            ipdb=fake_info.get("ipdb")
-        )
-        info_post = await visitor_info_post(session=session, item=visitor)
-        return info_post.model_dump()
-        #################################################################
-        #################################################################
+
     # Get the timestamp of the request
     timestamp = datetime.now().isoformat()
 

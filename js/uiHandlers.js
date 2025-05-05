@@ -1,10 +1,4 @@
 export function initializeUIHandlers() {
-    // COLLAPSIBLE HANDLER
-    //document.querySelector('.collapsible').addEventListener('click', () => {
-    //    const content = document.querySelector('.collapsible-content');
-    //    content.classList.toggle('visible');
-    //})
-
     // TAB SWITCHING HANDLER
     function showTab(tabId) {
         document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
