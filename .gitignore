@@ -172,3 +172,12 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# maxmind databases
+*.mmdb
+
+# VSCode configs
+.vscode
+
+# NPM-related
+node_modules/

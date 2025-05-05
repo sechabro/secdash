@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visitor Dashboard</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 10px;
+        }
+
+        .tab {
+            margin-right: 10px;
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #eee;
+            border-radius: 5px;
+        }
+
+        .tab.active {
+            background-color: #ccc;
+        }
+
+        .content {
+            display: none;
+        }
+
+        .content.active {
+            display: block;
+        }
+
+        table.connections-table {
+            width: 100%;
+            background-color: #1f2937;
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            border-collapse: collapse;
+            transition: box-shadow 0.3s ease;
+            position: relative;
+
+            /* Subtle light gradient for 3D effect */
+            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
+            background-blend-mode: hard-light;
+            margin: 0 auto;
+        }
+
+        table.connections-table th,
+        table.connections-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border: none;
+            /* Remove all grid lines */
+        }
+
+        table.connections-table th {
+            background-color: #00adee;
+            color: #1f2937;
+            font-weight: bold;
+            font-size: 0.95rem;
+        }
+
+        table.connections-table thead th:first-child {
+            border-top-left-radius: 12px;
+        }
+
+        table.connections-table thead th:last-child {
+            border-top-right-radius: 12px;
+        }
+
+        .collapsible {
+            cursor: pointer;
+            margin-top: 10px;
+            background-color: #f9f9f9;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            text-align: left;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease, padding 0.4s ease;
+            padding: 0 1rem;
+            background-color: #f0f0f0;
+            margin-top: 5px;
+        }
+
+        .collapsible-content.visible {
+            max-height: 500px;
+            padding: 10px 1rem;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background-color: #1f2937;
+            color: white;
+            overflow-x: hidden;
+            transition: width 0.3s ease;
+            z-index: 1000;
+            padding-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .sidebar.closed {
+            width: 60px;
+        }
+
+        .sidebar.open {
+            width: 200px;
+        }
+
+        .sidebar-header {
+            width: 100%;
+            text-align: left;
+            padding-left: 16px;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .sidebar-content {
+            width: 100%;
+            display: none;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .sidebar.open .sidebar-content {
+            display: block;
+        }
+
+        .sidebar button {
+            background-color: #00adee;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-top: 10px;
+            align-self: flex-start;
+        }
+
+        .main-content {
+            margin-left: 60px;
+            width: calc(100% - 60px);
+            transition: margin-left 0.3s ease, width 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        .sidebar.open~.main-content {
+            margin-left: 200px;
+            width: calc(100% - 200px);
+        }
+
+        #iostat-canvas-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 1rem;
+        }
+
+        #iostat-canvas-container canvas {
+            flex: 1 1 0;
+            max-width: 48%;
+            width: 100% !important;
+            height: auto !important;
+            display: block;
+            margin: 0 0.5rem;
+            aspect-ratio: 16 / 9;
+        }
+
+        #host-status {
+            margin-top: 1rem;
+        }
+
+        .host-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            background-color: #1f2937;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.95rem;
+            color: #00adee;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            justify-content: center;
+        }
+
+        .host-strip>div {
+            background: #fff;
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            box-shadow: inset 0 0 0 1px #e5e7eb;
+            min-width: 120px;
+            text-align: center;
+            align-self: center;
+        }
+
+        .user-card {
+            background-color: #1f2937;
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            margin-bottom: 24px;
+            transition: box-shadow 0.3s ease;
+            position: relative;
+
+            /* Subtle light gradient for 3D effect */
+            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
+            background-blend-mode: hard-light;
+        }
+
+        .user-card:hover {
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        .user-card table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .user-card table>thead>tr>th {
+            background-color: #00adee !important;
+            color: white !important;
+        }
+
+        .user-card th,
+        .user-card td {
+            padding: 6px;
+            border: none;
+        }
+
+        .user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+        }
+
+        .user-header h3 {
+            font-size: 1.25rem;
+            margin: 0;
+        }
+
+        .user-header p {
+            font-size: 0.95rem;
+            color: #d1d5db;
+            margin: 0;
+        }
+
+        .table-container {
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            /* visible border that hugs the radius */
+            margin-top: 12px;
+
+        }
+
+        .visitor-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .visitor-query {
+            position: sticky;
+            top: 0;
+            /* placing it above all the other stuff */
+            z-index: 1000;
+            background-color: #00adee;
+            color: white;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
+            background-blend-mode: hard-light;
+        }
+
+        .visitor-query label {
+            font-weight: bold;
+        }
+
+        .visitor-query select {
+            background-color: #1f2937;
+            color: white;
+            border: 1px solid #00adee;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+        }
+
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+        }
+
+        .pagination-controls button {
+            background-color: #1f2937;
+            color: white;
+            border: 1px solid transparent;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .pagination-controls button:hover:not(:disabled) {
+            border: 1px solid white;
+        }
+
+        .pagination-controls button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="sidebar" class="sidebar closed">
+        <div class="sidebar-header">
+            <span id="toggle-btn">&#9776;</span> <!-- hamburger -->
+        </div>
+        <div class="sidebar-content">
+            <p>Hi, {{ user }}</p>
+            <form action="/logout" method="get">
+                <button type="submit">Logout</button>
+            </form>
+        </div>
+    </div>
+    <!-- NEW WRAPPER -->
+    <div id="main-content" class="main-content">
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('visitors')">閲覧者情報</div>
+            <div class="tab" onclick="showTab('connections')">外部接続</div>
+            <div class="tab" onclick="showTab('host')">ホスト状況</div>
+            <div class="tab" onclick="showTab('processes')">サーバ側の処理</div>
+        </div>
+
+        <div id="visitors" class="content">
+            <h2>サイト訪問者ビューアー (リアルタイム)</h2>
+            <div class="visitor-query">
+                <label for="filter-field">Filter By:</label>
+                <select id="filter-field">
+                    <option value="is_active">Active Status</option>
+                    <option value="is_bot">Bot Status</option>
+                    <option value="ipdb">Tor Usage</option>
+                </select>
+
+                <label for="filter-param">Value:</label>
+                <select id="filter-param">
+                    <option value="true">True</option>
+                    <option value="false">False</option>
+                </select>
+
+                <div id="pagination-controls" class="pagination-controls">
+                    <button id="prev-page">Previous</button>
+                    <span id="page-number">Page 1</span>
+                    <button id="next-page">Next</button>
+                </div>
+            </div>
+            <div id="visitor-container" class="visitor-grid"></div>
+        </div>
+
+        <div id="connections" class="content">
+            <h2>サイトの外接続</h2>
+            <table class="connections-table">
+                <thead>
+                    <tr>
+                        <th>cmd</th>
+                        <th>pid</th>
+                        <th>user</th>
+                        <th>fd</th>
+                        <th>type</th>
+                        <th>device</th>
+                        <th>size/off</th>
+                        <th>node</th>
+                        <th>address</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div id="host" class="content">
+            <h2>システムパフォーマンス指標</h2>
+            <pre id="host-status"></pre>
+            <h2>サーバ入出力のリアルタイムデーター (1秒ごと)</h2>
+            <div id="iostat-canvas-container">
+                <canvas id="ioChart"></canvas>
+                <canvas id="cpuChart"></canvas>
+                <canvas id="diskOpsChart"></canvas>
+                <canvas id="loadChart"></canvas>
+            </div>
+        </div>
+
+        <div id="processes" class="content">
+            <h2>サーバ側のリアルタイムビューアー (1秒ごと)</h2>
+            <div id="process-container" class="process-grid"></div>
+        </div>
+    </div>
+    <script src="/js/bundle.js"></script>
+</body>
+
+</html>
