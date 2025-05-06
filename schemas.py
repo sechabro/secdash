@@ -58,7 +58,20 @@ class IOStatLine(SQLModel, table=True):
     load_avg_1m: float
 
 
+@dataclass(slots=True)
+class IoStatLineInMem:
+    date: str
+    time: str
+    kbt: float
+    tps: int
+    throughput_mbs: float
+    cpu_user_pct: float
+    cpu_system_pct: float
+    cpu_idle_pct: float
+    load_avg_1m: float
+
 # ----------- USER-RELATED CLASSES ------------
+
 
 class User(SQLModel):
     email: EmailStr

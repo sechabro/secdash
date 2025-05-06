@@ -12,7 +12,7 @@ from fastapi import Request, HTTPException, FastAPI, APIRouter
 from fastapi.concurrency import run_in_threadpool
 from datetime import datetime
 from user_agents import parse
-from schemas import Visitor, IOStatLine
+from schemas import Visitor, IoStatLineInMem
 from data_generation.data_generator import generate_fake_visitor_record_for_date
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
@@ -249,11 +249,21 @@ async def io_stream(script: str | None = None):
     iostat_data = await run_script(script=script)
     try:
         async for line in iostat_data.stdout:
-            iostats.append(dict(zip(
-                ["date", "time", "kbt", "tps", "mbs",
-                    "user", "sys", "idle", "load_avg_1m"],
-                line.decode().strip().split(",")
-            )))
+            (date, time, kbt, tps, mbs, user, sys, idle,
+             load) = line.decode().strip().split(",")
+            iostats.append(
+                IoStatLineInMem(
+                    date=date,
+                    time=time,
+                    kbt=float(kbt),
+                    tps=int(tps),
+                    throughput_mbs=float(mbs),
+                    cpu_user_pct=float(user),
+                    cpu_system_pct=float(sys),
+                    cpu_idle_pct=float(idle),
+                    load_avg_1m=float(load)
+                )
+            )
     except KeyboardInterrupt:
         print("Stopping...")
         iostat_data.terminate()

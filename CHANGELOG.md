@@ -20,3 +20,10 @@
 
 ### Fixed
 - Pagination state resets to 1 when query parameters (filters) are changed on the visitor dashboard.
+
+
+## [Unreleased] - 2025.05.06
+### Changed:
+
+### Changed
+- Optimized the in-memory I/O stats stream by replacing dictionary-based entries with a leaner, slot-based dataclass model.
