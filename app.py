@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
 from utils import stream_delivery, persist_visitors, iostats, running_ps, visitors, established_connections, visitor_stream, host_info_async, ps_stream, io_stream, password_hasher, password_verify, visitor_activity_gen
+from visitor_analysis import analyze_visitor
 from datetime import timedelta, datetime, timezone
 import asyncio
 from contextlib import asynccontextmanager
@@ -183,6 +184,14 @@ async def host_status(current_user: str = Depends(get_current_user)) -> dict:
     return await host_info_async()
 
 
+@app.post("/visitor-analysis")
+async def visitor_analysis(
+    visitor: schemas.VisitorInMem,
+    current_user: str = Depends(get_current_user)
+) -> JSONResponse:
+    return await analyze_visitor(visitor=visitor)
+
+
 @app.get("/visitors")
 async def visitor(
     request: Request,
@@ -260,6 +269,32 @@ async def token(response: Response, email: EmailStr, session: SessionDep) -> Res
     )
 
     return response
+
+
+'''
+FOR /docs ONLY
+
+token: str = Depends(oauth2_scheme) <--- paste directly into endpoint you want to test
+@app.post("/token")
+async def token_for_docs(
+    session: SessionDep,
+    form_data: OAuth2PasswordRequestForm = Depends()
+) -> JSONResponse:
+    user = await authenticate_user(session=session,
+                                   email=form_data.username,
+                                   password=form_data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    access_token_expires = timedelta(minutes=EXPIRE_MINUTES)
+    access_token = await create_access_token(
+        data={"sub": form_data.username}, expires_delta=access_token_expires
+    )
+
+    return JSONResponse(content={
+        "access_token": access_token,
+        "token_type": "bearer"
+    })'''
 
 
 async def authenticate_user(session: SessionDep, email: str, password: str):

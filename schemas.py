@@ -25,7 +25,7 @@ class Visitor(SQLModel, table=True):
     is_active: bool = False
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, order=False)
 class VisitorInMem():
     username: str
     acct_created: str
@@ -58,7 +58,7 @@ class IOStatLine(SQLModel, table=True):
     load_avg_1m: float
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, order=False)
 class IoStatLineInMem:
     date: str
     time: str

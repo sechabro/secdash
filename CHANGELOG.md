@@ -24,6 +24,11 @@
 
 ## [Unreleased] - 2025.05.06
 ### Changed:
-
-### Changed
 - Optimized the in-memory I/O stats stream by replacing dictionary-based entries with a leaner, slot-based dataclass model.
+
+## [Unreleased] - 2025.05.08
+### Added:
+- `/visitor-analysis` POST endpoint for GPT-4-driven visitor risk evaluation.
+- Manual "Analyze" button on each visitor card to trigger analysis
+- Modal to display GPT-4 analysis results including `risk_level`, `justification`, and `recommended_action`.
+- Conditional modal CTA button ("Start Case" or "Add to Cases") based on risk level. Need to fix this so that high-risk visitors have a case auto-created.
