@@ -3,17 +3,13 @@ import subprocess
 from functools import reduce
 import random
 from database import async_session_maker
-import smtplib
 from sqlalchemy.ext.asyncio import AsyncSession
 from geoip2 import webservice, database, errors
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from fastapi import Request, HTTPException, FastAPI, APIRouter
 from fastapi.concurrency import run_in_threadpool
 from datetime import datetime
 from user_agents import parse
 from schemas import Visitor, IoStatLineInMem
-from data_generation.data_generator import generate_fake_visitor_record_for_date
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
 import os
@@ -22,7 +18,7 @@ import time
 import httpx
 import asyncio
 from collections import deque
-from typing import Any
+from typing import Any, Callable
 import threading
 from sqlmodel import Session
 from crud import visitor_info_post, get_user_by_email, get_visitors, shutdown_db_update
@@ -170,10 +166,20 @@ async def stream_delivery(
                 if get_field_value(item, filter_field) == filter_param
             ]
 
+        # DRAGON [2025-05-09]: Grouping logic below is hardcoded for ps_stream only.
+        # For now it's fine, but this function should stay stream-agnostic.
+        # Later: replace with a grouping_fn param (Callable) to support pluggable grouping per stream.
+
         # Grouping
-        elif group:
+        if group:
             ps_grouping_snapshot = list(data_stream)
             new_snapshot = await ps_stream_grouping(items=ps_grouping_snapshot)
+
+        # Currently pagination only occurs for visitor activity stream. However,
+        # an item count takes place for every SSE at the moment. This only needs
+        # to run when the delivery needs to be paginated. Fine living with it as-
+        # is for now, but eventually need to isolate the functionality behind a
+        # conditional.
 
         total_items = len(new_snapshot)
         # Pagination
