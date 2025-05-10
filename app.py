@@ -230,7 +230,9 @@ async def process_stream(current_user: str = Depends(get_current_user)) -> Strea
     return StreamingResponse(
         stream_delivery(
             data_stream=running_ps,
-            group="ps"
+            group=True,
+            outer_key="user",
+            inner_key="ppid"
         ),
         media_type="text/event-stream"
     )

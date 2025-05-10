@@ -32,3 +32,11 @@
 - Manual "Analyze" button on each visitor card to trigger analysis
 - Modal to display GPT-4 analysis results including `risk_level`, `justification`, and `recommended_action`.
 - Conditional modal CTA button ("Start Case" or "Add to Cases") based on risk level. Need to fix this so that high-risk visitors have a case auto-created.
+
+## [Unreleased] - 2025.05.10
+### Added:
+- `group_by_keys()` utility function to modularize and generalize grouping. DRAGON SLAYED
+- `paginate()` utility function, also modularized/generalized and decoupled from visitors-only.
+
+### Changed:
+- Refactored `stream_delivery()` to offload grouping and pagination helpers mentioned above.
