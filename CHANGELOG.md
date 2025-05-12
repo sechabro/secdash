@@ -40,3 +40,13 @@
 
 ### Changed:
 - Refactored `stream_delivery()` to offload grouping and pagination helpers mentioned above.
+
+
+## [Unreleased] - 2025.05.12
+### Added:
+- `class VisitorsFlagged()` table to database. Tested functionality over on /docs successfully.
+- crud.py function `visitor_flag_post()` to handle db session for VisitorsFlagged table.
+- app.py `"/visitor-flag"` endpoint to prepare and send data to above crud.py function.
+
+### Changed:
+- Jumped into Postgres conf file to set default timezone to `'Asia/Tokyo'`. Restarted, and good to go.

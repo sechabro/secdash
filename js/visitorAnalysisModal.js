@@ -1,3 +1,5 @@
+import { startCase } from './flagAccount.js';
+
 export async function showVisitorAnalysis(visitor) {
     const modal = document.getElementById("analysis-modal");
     const content = document.querySelector(".modal-content");
@@ -30,8 +32,9 @@ export async function showVisitorAnalysis(visitor) {
         justificationSpan.textContent = result.justification;
         actionSpan.textContent = result.recommended_action;
 
-        caseBtn.textContent = result.risk_level === "high" ? "Start Case" : "Add to Cases";
-        caseBtn.onclick = () => {
+        caseBtn.textContent = "Create Case";
+        caseBtn.onclick = async () => {
+            startCase(visitor, result);
             alert(`User "${visitor.username}" flagged and added to cases.`);
             modal.classList.add("hidden");
         };

@@ -1,31 +1,34 @@
+import asyncio
 import json
-import subprocess
-from functools import reduce
+import logging
+import os
 import random
-from database import async_session_maker
-from sqlalchemy.ext.asyncio import AsyncSession
-from geoip2 import webservice, database, errors
-from fastapi import Request, HTTPException, FastAPI, APIRouter
-from fastapi.concurrency import run_in_threadpool
+import subprocess
+import threading
+import time
+from collections import defaultdict, deque
+from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime
-from user_agents import parse
-from schemas import Visitor, IoStatLineInMem
+from functools import reduce
+from typing import Any, Callable
+
+import httpx
+import psutil
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
-import os
-import psutil
-import time
-import httpx
-import asyncio
-from collections import deque
-from typing import Any, Callable
-import threading
-from sqlmodel import Session
-from crud import visitor_info_post, get_user_by_email, get_visitors, shutdown_db_update
+from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
+from geoip2 import database, errors, webservice
 from pympler import asizeof
-from collections import defaultdict
-from dataclasses import fields, asdict, is_dataclass
-import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import Session
+from user_agents import parse
+
+from crud import (get_user_by_email, get_visitors, shutdown_db_update,
+                  visitor_info_post)
+from database import async_session_maker
+from schemas import IoStatLineInMem, Visitor
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 psh = PasswordHasher()
@@ -381,36 +384,6 @@ async def persist_visitors() -> bool:
             updates = list(visitors)
             shutdown_update = await shutdown_db_update(session=session, visitor_list=updates)
             return shutdown_update
-
-'''async def visitor_stream(request: Request, session: Session) -> dict:
-    # Get the visitor's IP address (you might need to adapt this for proxies)
-    client_ip = request.client.host
-    client_port = request.client.port
-
-    # Get the timestamp of the request
-    timestamp = datetime.now().isoformat()
-
-    # get the user-agent raw string from request headers, and parse it out
-    ua_string = dict(request.headers).get("user-agent")
-    user_agent = parse(ua_string)
-    device_info = f"{user_agent.device.family} {user_agent.device.brand} {user_agent.os.family} {user_agent.os.version_string}"
-    browser_info = f"{user_agent.browser.family} {user_agent.browser.version_string}"
-    is_bot = user_agent.is_bot
-
-    # geo info try-block
-    try:
-        geo_info = await locale_formatting(client_ip=client_ip)
-    except Exception as e:
-        geo_info = str(e)
-
-    ip_info = await ipabuse_check(ip=client_ip)
-
-    visitor = Visitor(timestamp=timestamp, ip=client_ip, port=str(client_port),
-                      device_info=device_info, browser_info=browser_info, is_bot=is_bot, geo_info=geo_info, ipdb=ip_info)
-
-    # You can now process this data, store it in the database, etc.
-    info_post = await visitor_info_post(db=session, item=visitor)
-    return info_post.model_dump()'''
 
 
 async def ipabuse_check(ip: str):
