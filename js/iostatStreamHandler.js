@@ -23,11 +23,11 @@ export function startIostatStream() {
             diskOpsChart.data.labels.push(data.time);
             loadChart.data.labels.push(data.time);
 
-            ioChart.data.datasets[0].data.push(parseFloat(data.mbs));
+            ioChart.data.datasets[0].data.push(parseFloat(data.throughput_mbs));
 
-            cpuChart.data.datasets[0].data.push(parseFloat(data.idle));
-            cpuChart.data.datasets[1].data.push(parseFloat(data.user));
-            cpuChart.data.datasets[2].data.push(parseFloat(data.sys));
+            cpuChart.data.datasets[0].data.push(parseFloat(data.cpu_idle_pct));
+            cpuChart.data.datasets[1].data.push(parseFloat(data.cpu_user_pct));
+            cpuChart.data.datasets[2].data.push(parseFloat(data.cpu_system_pct));
 
             diskOpsChart.data.datasets[0].data.push(parseFloat(data.kbt));
             diskOpsChart.data.datasets[1].data.push(parseInt(data.tps));

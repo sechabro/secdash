@@ -1,35 +1,34 @@
+import asyncio
 import json
-import subprocess
-from functools import reduce
+import logging
+import os
 import random
-from database import async_session_maker
-import smtplib
-from sqlalchemy.ext.asyncio import AsyncSession
-from geoip2 import webservice, database, errors
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from fastapi import Request, HTTPException, FastAPI, APIRouter
-from fastapi.concurrency import run_in_threadpool
+import subprocess
+import threading
+import time
+from collections import defaultdict, deque
+from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime
-from user_agents import parse
-from schemas import Visitor, IOStatLine
-from data_generation.data_generator import generate_fake_visitor_record_for_date
+from functools import reduce
+from typing import Any, Callable
+
+import httpx
+import psutil
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
-import os
-import psutil
-import time
-import httpx
-import asyncio
-from collections import deque
-from typing import Any
-import threading
-from sqlmodel import Session
-from crud import visitor_info_post, get_user_by_email, get_visitors, shutdown_db_update
+from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
+from geoip2 import database, errors, webservice
 from pympler import asizeof
-from collections import defaultdict
-from dataclasses import fields, asdict, is_dataclass
-import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import Session
+from user_agents import parse
+
+from crud import (get_user_by_email, get_visitors, shutdown_db_update,
+                  visitor_info_post)
+from database import async_session_maker
+from schemas import IoStatLineInMem, Visitor
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 psh = PasswordHasher()
@@ -120,8 +119,10 @@ async def run_script(script: str | None = None):
                                                 stdout=asyncio.subprocess.PIPE,
                                                 stderr=asyncio.subprocess.PIPE)
 
+
 ###############################################################################
 ####################### UNIVERSAL STREAM DELIVERY SERVICE #####################
+##################### WITH HELPERS! ###########################################
 
 
 def get_field_value(item: Any, field: str):
@@ -144,7 +145,9 @@ async def stream_delivery(
     data_stream: deque,
     sort: bool | None = False,
     key: str | None = None,
-    group: str | None = None,
+    group: bool | None = False,
+    outer_key: str | None = None,
+    inner_key: str | None = None,
     filter_field: str | None = None,
     filter_param: str | None = None,
     page: int | None = None,
@@ -153,6 +156,7 @@ async def stream_delivery(
     old_snapshot = []
     while True:
         await asyncio.sleep(1)
+        total_items = None
         new_snapshot = list(data_stream)
 
         # Sorting
@@ -170,44 +174,55 @@ async def stream_delivery(
                 if get_field_value(item, filter_field) == filter_param
             ]
 
+        # DRAGON [2025-05-10]: SLAYED. Grouping modularized and decoupled.
         # Grouping
-        elif group:
-            ps_grouping_snapshot = list(data_stream)
-            new_snapshot = await ps_stream_grouping(items=ps_grouping_snapshot)
+        if group:
+            grouping_snapshot = list(data_stream)
+            new_snapshot = group_by_keys(
+                items=grouping_snapshot, outer_key=outer_key, inner_key=inner_key)
 
-        total_items = len(new_snapshot)
         # Pagination
         if page is not None and limit is not None:
-            start = (page - 1) * limit
-            end = start + limit
-            new_snapshot = new_snapshot[start:end]
+            paginating_snapshot = new_snapshot
+            new_snapshot, total_items = paginate(
+                page=page, limit=limit, snapshot=paginating_snapshot)
 
         if new_snapshot != old_snapshot:
             # needed to determine page total for frontend
             is_dc = is_dataclass(new_snapshot[0]) if new_snapshot else False
             serialized = [
                 asdict(item) if is_dc else item for item in new_snapshot]
-            yield f"event: meta\ndata: {json.dumps({'total_items': total_items})}\n\n"
+            if total_items:
+                yield f"event: meta\ndata: {json.dumps({'total_items': total_items})}\n\n"
             yield f"data: {json.dumps(serialized)}\n\n"
             old_snapshot = new_snapshot
+
+
+def paginate(page: int, limit: int, snapshot: list) -> tuple:
+    total_items = len(snapshot)
+    start = (page - 1) * limit
+    end = start + limit
+    new_snapshot = snapshot[start:end]
+    return (new_snapshot, total_items)
+
+
+def group_by_keys(items: list, outer_key: str, inner_key: str) -> list:
+    return_dict = {}
+    for item in items:
+        group = item.get(outer_key)
+        group_value = item.get(inner_key)
+        if not return_dict.get(group):
+            return_dict.update({group: {}})
+        if not return_dict[group].get(group_value):
+            return_dict[group][group_value] = []
+        return_dict[group][group_value].append(item)
+    return [{group: data} for group, data in return_dict.items()]
+
 
 ###############################################################################
 #### SYSTEM PROCESS ###########################################################
 ################# METRICS #####################################################
 ####################### STREAM ################################################
-
-
-async def ps_stream_grouping(items: list) -> list:
-    return_dict = {}
-    for item in items:
-        user = item.get("user")
-        ppid = item.get("ppid")
-        if not return_dict.get(user):
-            return_dict.update({user: {}})
-        if not return_dict[user].get(ppid):
-            return_dict[user][ppid] = []
-        return_dict[user][ppid].append(item)
-    return [{user: data} for user, data in return_dict.items()]
 
 
 async def ps_stream(script: str | None = None):
@@ -249,11 +264,21 @@ async def io_stream(script: str | None = None):
     iostat_data = await run_script(script=script)
     try:
         async for line in iostat_data.stdout:
-            iostats.append(dict(zip(
-                ["date", "time", "kbt", "tps", "mbs",
-                    "user", "sys", "idle", "load_avg_1m"],
-                line.decode().strip().split(",")
-            )))
+            (date, time, kbt, tps, mbs, user, sys, idle,
+             load) = line.decode().strip().split(",")
+            iostats.append(
+                IoStatLineInMem(
+                    date=date,
+                    time=time,
+                    kbt=float(kbt),
+                    tps=int(tps),
+                    throughput_mbs=float(mbs),
+                    cpu_user_pct=float(user),
+                    cpu_system_pct=float(sys),
+                    cpu_idle_pct=float(idle),
+                    load_avg_1m=float(load)
+                )
+            )
     except KeyboardInterrupt:
         print("Stopping...")
         iostat_data.terminate()
@@ -359,36 +384,6 @@ async def persist_visitors() -> bool:
             updates = list(visitors)
             shutdown_update = await shutdown_db_update(session=session, visitor_list=updates)
             return shutdown_update
-
-'''async def visitor_stream(request: Request, session: Session) -> dict:
-    # Get the visitor's IP address (you might need to adapt this for proxies)
-    client_ip = request.client.host
-    client_port = request.client.port
-
-    # Get the timestamp of the request
-    timestamp = datetime.now().isoformat()
-
-    # get the user-agent raw string from request headers, and parse it out
-    ua_string = dict(request.headers).get("user-agent")
-    user_agent = parse(ua_string)
-    device_info = f"{user_agent.device.family} {user_agent.device.brand} {user_agent.os.family} {user_agent.os.version_string}"
-    browser_info = f"{user_agent.browser.family} {user_agent.browser.version_string}"
-    is_bot = user_agent.is_bot
-
-    # geo info try-block
-    try:
-        geo_info = await locale_formatting(client_ip=client_ip)
-    except Exception as e:
-        geo_info = str(e)
-
-    ip_info = await ipabuse_check(ip=client_ip)
-
-    visitor = Visitor(timestamp=timestamp, ip=client_ip, port=str(client_port),
-                      device_info=device_info, browser_info=browser_info, is_bot=is_bot, geo_info=geo_info, ipdb=ip_info)
-
-    # You can now process this data, store it in the database, etc.
-    info_post = await visitor_info_post(db=session, item=visitor)
-    return info_post.model_dump()'''
 
 
 async def ipabuse_check(ip: str):

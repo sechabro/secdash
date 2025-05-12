@@ -1,18 +1,21 @@
-from sqlmodel import SQLModel, Field, JSON, Column
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Annotated, Optional
+
 from pydantic import EmailStr
 from pydantic.types import StringConstraints
-from typing import Optional, Annotated
-from dataclasses import dataclass
+from sqlalchemy import DateTime
+from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 # ----------- VISITOR-RELATED CLASSES ------------
 
 
 class Visitor(SQLModel, table=True):
-    __tablename__ = "visitors"  # optional, but I want to override default 'visitor'
+    __tablename__ = "visitors"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str
-    acct_created: str  # or datetime if you're storing as an actual datetime
+    acct_created: str
     ip: str
     port: str
     device_info: str
@@ -25,8 +28,9 @@ class Visitor(SQLModel, table=True):
     is_active: bool = False
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, order=False)
 class VisitorInMem():
+    visitor_id: int
     username: str
     acct_created: str
     ip: str
@@ -40,7 +44,22 @@ class VisitorInMem():
     time_idle: int
     is_active: bool
 
-# ----------- STREAM-RELATED CLASSES ------------
+# -------------- VISITOR CASE-RELATED CLASSES ---------------
+
+
+class VisitorsFlagged(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    visitor_id: Optional[int] = Field(default=None, foreign_key="visitors.id")
+    risk_level: str  # ai risk assessment. e.g. "low", "medium", "high"
+    justification: str  # ai explanation
+    recommended_action: str  # ai suggestion
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now().astimezone(),
+        sa_column=Column(DateTime(timezone=True))
+    )
+    visitor_info: Optional[Visitor] = Relationship()
+
+# ----------- SYSTEM PERFORMANCE-RELATED CLASSES ------------
 
 
 class IOStatLine(SQLModel, table=True):
@@ -58,7 +77,20 @@ class IOStatLine(SQLModel, table=True):
     load_avg_1m: float
 
 
+@dataclass(slots=True, order=False)
+class IoStatLineInMem:
+    date: str
+    time: str
+    kbt: float
+    tps: int
+    throughput_mbs: float
+    cpu_user_pct: float
+    cpu_system_pct: float
+    cpu_idle_pct: float
+    load_avg_1m: float
+
 # ----------- USER-RELATED CLASSES ------------
+
 
 class User(SQLModel):
     email: EmailStr

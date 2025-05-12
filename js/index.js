@@ -10,6 +10,7 @@ import { initializeUIHandlers } from "./uiHandlers.js";
 import { startVisitorStream, connectVisitorStream } from './visitorStreamHandler.js';
 import { renderVisitors } from './renderVisitors.js';
 import { initVisitorPagination } from './visitorPagination.js';
+
 export {
     fetchHostStatus,
     fetchConnectionsData,

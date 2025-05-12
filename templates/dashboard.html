@@ -279,6 +279,21 @@
 
         }
 
+        .analyze-btn {
+            background-color: #00adee;
+            color: white;
+            padding: 6px 12px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s ease;
+        }
+
+        .analyze-btn:hover {
+            background-color: #0086b3;
+        }
+
         .visitor-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -342,6 +357,83 @@
         .pagination-controls button:disabled {
             opacity: 0.4;
             cursor: not-allowed;
+        }
+
+        .modal {
+            display: block;
+            opacity: 0;
+            pointer-events: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            transition: opacity 0.4s ease;
+        }
+
+        .modal:not(.hidden) {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background-color: #1f2937;
+            color: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            width: 80%;
+            max-width: 600px;
+            margin: 15% auto;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .modal-content.visible {
+            opacity: 1;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .close-button {
+            float: right;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .case-button {
+            margin-top: 16px;
+            padding: 8px 16px;
+            background-color: #00adee;
+            border: none;
+            color: white;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .spinner {
+            position: fixed;
+            z-index: 10000;
+            top: 50%;
+            left: 50%;
+            width: 48px;
+            height: 48px;
+            margin: -24px 0 0 -24px;
+            border: 6px solid #ccc;
+            border-top-color: #00adee;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
@@ -428,7 +520,20 @@
             <h2>サーバ側のリアルタイムビューアー (1秒ごと)</h2>
             <div id="process-container" class="process-grid"></div>
         </div>
+
+        <div id="analysis-modal" class="modal hidden">
+            <div id="analysis-loading" class="spinner hidden"></div>
+            <div class="modal-content">
+                <span id="modal-close" class="close-button">&times;</span>
+                <h2>Risk Analysis</h2>
+                <p><strong>Risk Level:</strong> <span id="risk-level"></span></p>
+                <p><strong>Justification:</strong> <span id="justification"></span></p>
+                <p><strong>Recommended Action:</strong> <span id="recommended-action"></span></p>
+                <button id="case-action-button" class="case-button"></button>
+            </div>
+        </div>
     </div>
+
     <script src="/js/bundle.js"></script>
 </body>
 

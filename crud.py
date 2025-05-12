@@ -1,13 +1,17 @@
-from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import update
-from pydantic import EmailStr
-import schemas
-from fastapi import UploadFile, HTTPException, status, Request
-import shutil
-import os
 import logging
+import os
+import shutil
 from datetime import datetime
+
+from fastapi import HTTPException, Request, UploadFile, status
+from fastapi.responses import JSONResponse
+from pydantic import EmailStr
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+
+import schemas
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 # import aiofiles
@@ -44,13 +48,29 @@ async def get_visitors(session: AsyncSession) -> list[schemas.VisitorInMem]:
 
     return [
         schemas.VisitorInMem(
-            v.username, v.acct_created, v.ip, v.port, v.device_info,
+            v.id, v.username, v.acct_created, v.ip, v.port, v.device_info,
             v.browser_info, v.is_bot, v.geo_info,
-            v.ipdb.get("isTor", 0),  # lean structure
+            v.ipdb.get("isTor", False),  # lean structure
             v.last_active, v.time_idle, v.is_active
         )
         for v in visitors
     ]
+
+
+async def visitor_flag_post(session: AsyncSession, item: schemas.VisitorsFlagged) -> JSONResponse:
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    logger.info(
+        f' Account {item.visitor_id} flagged successfully. Case created.')
+    return JSONResponse(
+        status_code=201,
+        content={
+            "message": f"Visitor {item.visitor_id} flagged successfully.",
+            "case_id": item.id,
+            "created_at": item.created_at.isoformat()
+        }
+    )
 
 
 async def shutdown_db_update(session: AsyncSession, visitor_list: list) -> bool:

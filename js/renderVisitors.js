@@ -1,5 +1,8 @@
+import { showVisitorAnalysis } from './visitorAnalysisModal.js';
+
 export function renderVisitors(data) {
     const container = document.getElementById("visitor-container");
+
     container.innerHTML = "";
 
     data.forEach(visitor => {
@@ -20,8 +23,9 @@ export function renderVisitors(data) {
         const table = document.createElement("table");
         table.innerHTML = `
             <tbody>
+                <tr><td>Account Created:</td><td>${visitor.acct_created}</td></tr>
+                <tr><td>Last Active:</td><td>${visitor.last_active}</td></tr>
                 <tr><td>IP:</td><td>${visitor.ip}</td></tr>
-                <tr><td>Port:</td><td>${visitor.port}</td></tr>
                 <tr><td>Geo:</td><td>${visitor.geo_info}</td></tr>
                 <tr><td>Device:</td><td>${visitor.device_info}</td></tr>
                 <tr><td>Browser:</td><td>${visitor.browser_info}</td></tr>
@@ -31,7 +35,16 @@ export function renderVisitors(data) {
             </tbody>
         `;
 
+        const analyzeButton = document.createElement("button");
+        analyzeButton.classList.add("analyze-btn");
+        analyzeButton.textContent = "Analyze";
+
+        analyzeButton.addEventListener("click", async () => {
+            showVisitorAnalysis(visitor);
+        });
+
         tableContainer.appendChild(table);
+        tableContainer.appendChild(analyzeButton);
         card.appendChild(tableContainer);
         container.appendChild(card);
     });

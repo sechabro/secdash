@@ -1,23 +1,33 @@
-from fastapi import FastAPI, Request, Response, Form, Query, HTTPException, Depends, status, Cookie
-from typing import Annotated, Any
-from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi.staticfiles import StaticFiles
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
-from utils import stream_delivery, persist_visitors, iostats, running_ps, visitors, established_connections, visitor_stream, host_info_async, ps_stream, io_stream, password_hasher, password_verify, visitor_activity_gen
-from datetime import timedelta, datetime, timezone
 import asyncio
+import logging
+import os
 from contextlib import asynccontextmanager
-from fastapi.concurrency import run_in_threadpool
+from datetime import datetime, timedelta, timezone
+from typing import Annotated, Any
+
 import jwt
+from fastapi import (Cookie, Depends, FastAPI, Form, HTTPException, Query,
+                     Request, Response, status)
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
+                               StreamingResponse)
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from jwt.exceptions import InvalidTokenError
 from pydantic import EmailStr
-import os
-import schemas
-import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+
 import crud
-from database import temp_sync_engine, async_session_maker, database_check, create_tables, get_session
+import schemas
+from database import (async_session_maker, create_tables, database_check,
+                      get_session, temp_sync_engine)
+from utils import (established_connections, host_info_async, io_stream,
+                   iostats, password_hasher, password_verify, persist_visitors,
+                   ps_stream, running_ps, stream_delivery,
+                   visitor_activity_gen, visitor_stream, visitors)
+from visitor_analysis import analyze_visitor
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -89,6 +99,11 @@ async def shutdown_async():
 @app.get("/", response_class=HTMLResponse, response_model=None)
 async def home(request: Request):
     return templates.TemplateResponse("home.html", {"request": request})
+
+# DRAGON [2025-05-11]: Login via username instead of email.
+# Logging in with an email address at the moment. Fine for now,
+# but eventually want to change it to keep it consistent with
+# required inputs in OAuth2PasswordRequestForm.
 
 
 @app.post("/login")
@@ -183,6 +198,23 @@ async def host_status(current_user: str = Depends(get_current_user)) -> dict:
     return await host_info_async()
 
 
+@app.post("/visitor-analysis")
+async def visitor_analysis(
+    visitor: schemas.VisitorInMem,
+    current_user: str = Depends(get_current_user)
+) -> JSONResponse:
+    return await analyze_visitor(visitor=visitor)
+
+
+@app.post("/visitor-flag")
+async def visitor_flag(
+    visitor: schemas.VisitorsFlagged,
+    session: SessionDep,
+    current_user: str = Depends(get_current_user)
+) -> JSONResponse:
+    return await crud.visitor_flag_post(session=session, item=visitor)
+
+
 @app.get("/visitors")
 async def visitor(
     request: Request,
@@ -221,7 +253,9 @@ async def process_stream(current_user: str = Depends(get_current_user)) -> Strea
     return StreamingResponse(
         stream_delivery(
             data_stream=running_ps,
-            group="ps"
+            group=True,
+            outer_key="user",
+            inner_key="ppid"
         ),
         media_type="text/event-stream"
     )
@@ -260,6 +294,31 @@ async def token(response: Response, email: EmailStr, session: SessionDep) -> Res
     )
 
     return response
+
+
+'''# FOR /docs ONLY
+
+# token: str = Depends(oauth2_scheme) <--- paste directly into endpoint you want to test
+@app.post("/token")
+async def token(
+    session: SessionDep,
+    form_data: OAuth2PasswordRequestForm = Depends()
+) -> JSONResponse:
+    user = await authenticate_user(session=session,
+                                   email=form_data.username,
+                                   password=form_data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    access_token_expires = timedelta(minutes=EXPIRE_MINUTES)
+    access_token = await create_access_token(
+        data={"sub": form_data.username}, expires_delta=access_token_expires
+    )
+
+    return JSONResponse(content={
+        "access_token": access_token,
+        "token_type": "bearer"
+    })'''
 
 
 async def authenticate_user(session: SessionDep, email: str, password: str):
