@@ -11,9 +11,15 @@ export async function startCase(visitor, result) {
             })
         });
 
+        const connText = await connRes.text();
+
+        if (connRes.ok) {
+            console.log("successful flag:", connText)
+            alert(`User "${visitor.username}" flagged and added to cases.`);
+        }
+
         if (!connRes.ok) {
-            const errorText = await connRes.text();
-            console.error("Failed to flag visitor:", errorText);
+            console.error("Failed to flag visitor:", connText);
             alert("Something went wrong creating the case.");
         }
 

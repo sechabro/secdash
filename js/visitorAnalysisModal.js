@@ -35,7 +35,6 @@ export async function showVisitorAnalysis(visitor) {
         caseBtn.textContent = "Create Case";
         caseBtn.onclick = async () => {
             startCase(visitor, result);
-            alert(`User "${visitor.username}" flagged and added to cases.`);
             modal.classList.add("hidden");
         };
 
