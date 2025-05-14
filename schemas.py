@@ -47,16 +47,19 @@ class VisitorInMem():
 # -------------- VISITOR CASE-RELATED CLASSES ---------------
 
 
-class VisitorsFlagged(SQLModel, table=True):
+class VisitorsFlaggedSummary(SQLModel):
     id: Optional[int] = Field(default=None, primary_key=True)
     visitor_id: Optional[int] = Field(default=None, foreign_key="visitors.id")
-    risk_level: str  # ai risk assessment. e.g. "low", "medium", "high"
-    justification: str  # ai explanation
-    recommended_action: str  # ai suggestion
+    risk_level: str
     created_at: datetime = Field(
         default_factory=lambda: datetime.now().astimezone(),
         sa_column=Column(DateTime(timezone=True))
     )
+
+
+class VisitorsFlagged(VisitorsFlaggedSummary, table=True):
+    justification: str  # ai explanation
+    recommended_action: str  # ai suggestion
     visitor_info: Optional[Visitor] = Relationship()
 
 # ----------- SYSTEM PERFORMANCE-RELATED CLASSES ------------

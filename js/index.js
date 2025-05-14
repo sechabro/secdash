@@ -1,28 +1,29 @@
-import Chart from 'chart.js/auto';
-import './ioChart.js';
-import { fetchHostStatus } from "./fetchHostStatus.js";
 import { fetchConnectionsData } from "./fetchConnectionsData.js";
-import { renderGroupedProcesses } from './renderGroupedProcesses.js';
+import { fetchHostStatus } from "./fetchHostStatus.js";
+import './ioChart.js';
 import { startIostatStream } from "./iostatStreamHandler.js";
 import { startProcessStream } from "./processStreamHandler.js";
-import { runWhenReady } from "./runWhenReady.js";
-import { initializeUIHandlers } from "./uiHandlers.js";
-import { startVisitorStream, connectVisitorStream } from './visitorStreamHandler.js';
+import { renderGroupedProcesses } from './renderGroupedProcesses.js';
 import { renderVisitors } from './renderVisitors.js';
+import { runWhenReady } from "./runWhenReady.js";
+import { casesViewSwitch, initializeUIHandlers, liveDashboardSwitch } from "./uiHandlers.js";
 import { initVisitorPagination } from './visitorPagination.js';
+import { connectVisitorStream, startVisitorStream } from './visitorStreamHandler.js';
 
 export {
-    fetchHostStatus,
+    casesViewSwitch,
+    connectVisitorStream,
     fetchConnectionsData,
+    fetchHostStatus,
+    initializeUIHandlers,
+    initVisitorPagination,
+    liveDashboardSwitch,
     renderGroupedProcesses,
+    renderVisitors,
+    runWhenReady,
     startIostatStream,
     startProcessStream,
-    startVisitorStream,
-    connectVisitorStream,
-    runWhenReady,
-    initializeUIHandlers,
-    renderVisitors,
-    initVisitorPagination
+    startVisitorStream
 };
 
 window.fetchHostStatus = fetchHostStatus;
@@ -38,3 +39,5 @@ window.runWhenReady = runWhenReady;
 // ✅ Autostart the dashboard UI
 initializeUIHandlers();
 initVisitorPagination();
+casesViewSwitch();
+liveDashboardSwitch();
