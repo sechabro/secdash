@@ -59,4 +59,4 @@
 - `fetchCaseLoad.js` module to dynamically populate the cases table from the backend API.
 
 ### Changed:
-- `class VisitorsFlagged()` has been split into `class VisitorsFlaggedSummary()`, which returns a thinned list read-out of all cases, and `class VisitorsFlagged()` which builds on top of `VisitorsFlaggedSummary()`, and is used for case detail retrieval, as well as new cases. Functional testing still successful.
+- `class VisitorsFlagged()` has been split into `class VisitorsFlaggedSummary()`, which returns an info-light list of all cases, and `class VisitorsFlagged()` which builds on top of `VisitorsFlaggedSummary()`, and is used for full case detail retrieval, as well as new case creation (still). Functional testing still successful.
