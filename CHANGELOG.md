@@ -51,3 +51,12 @@
 
 ### Changed:
 - Jumped into Postgres conf file to set default timezone to `'Asia/Tokyo'`. Restarted, and good to go.
+
+## [Unreleased] - 2025.05.12
+### Added:
+- `/flagged-visitors` and `flagged-visitors/{case_id}` endpoints. They return a thinned out list of all cases, and the details for one specific case, respectively.
+- New "Cases" section in `dashboard.html`, including a sidebar navigation link and a `.case-listout` table.
+- `fetchCaseLoad.js` module to dynamically populate the cases table from the backend API.
+
+### Changed:
+- `class VisitorsFlagged()` has been split into `class VisitorsFlaggedSummary()`, which returns an info-light list of all cases, and `class VisitorsFlagged()` which builds on top of `VisitorsFlaggedSummary()`, and is used for full case detail retrieval, as well as new case creation (still). Functional testing still successful.

@@ -1,3 +1,5 @@
+import { fetchCaseLoad } from "./fetchCaseLoad.js";
+
 export function initializeUIHandlers() {
     // TAB SWITCHING HANDLER
     function showTab(tabId) {
@@ -29,4 +31,24 @@ export function initializeUIHandlers() {
     window.runWhenReady(() => window.startVisitorStream());
     // show visitors tab by default:
     showTab('visitors');
+}
+
+export async function casesViewSwitch() {
+    document.getElementById("nav-cases").addEventListener("click", async (e) => {
+        e.preventDefault();
+
+        document.getElementById("main-content").classList.add("hidden");
+        document.getElementById("cases-view").classList.remove("hidden");
+
+        await fetchCaseLoad(); //<-- this is async btw.
+    });
+}
+
+export function liveDashboardSwitch() {
+    document.getElementById("live-dashboard").addEventListener("click", (e) => {
+        e.preventDefault();
+
+        document.getElementById("cases-view").classList.add("hidden");
+        document.getElementById("main-content").classList.remove("hidden");
+    });
 }

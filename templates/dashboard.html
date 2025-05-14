@@ -69,12 +69,12 @@
             font-size: 0.95rem;
         }
 
-        table.connections-table thead th:first-child {
-            border-top-left-radius: 12px;
+        table.case-listout thead th:first-child {
+            border-top-left-radius: 12px !important;
         }
 
-        table.connections-table thead th:last-child {
-            border-top-right-radius: 12px;
+        table.case-listout thead th:last-child {
+            border-top-right-radius: 12px !important;
         }
 
         .collapsible {
@@ -142,6 +142,23 @@
 
         .sidebar.open .sidebar-content {
             display: block;
+        }
+
+        .sidebar-content a {
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 18px;
+            display: block;
+            margin-bottom: 7px;
+        }
+
+        .sidebar-content a:hover {
+            text-decoration: underline;
+        }
+
+        .sidebar-content a:last-of-type {
+            margin-bottom: 2px;
         }
 
         .sidebar button {
@@ -435,22 +452,113 @@
                 transform: rotate(360deg);
             }
         }
+
+        .case-listout {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        .case-listout td,
+        .case-listout th {
+            padding: 10px 12px;
+            text-align: left;
+            word-wrap: break-word;
+        }
+
+        table.case-listout {
+            width: 100%;
+            background-color: #1f2937;
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            border-collapse: collapse;
+            transition: box-shadow 0.3s ease;
+            margin: 0 auto;
+            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
+            background-blend-mode: hard-light;
+            table-layout: fixed;
+        }
+
+        table.case-listout th,
+        table.case-listout td {
+            padding: 12px;
+            text-align: center;
+            border: none;
+            font-size: 0.95rem;
+            vertical-align: middle;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        table.case-listout th {
+            background-color: #00adee;
+            color: #1f2937;
+            font-weight: bold;
+        }
+
+        table.case-listout tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+        }
+
+        .case-listout td:first-child,
+        .case-listout th:first-child {
+            width: 10%;
+        }
+
+        .case-listout td:nth-child(2),
+        .case-listout th:nth-child(2) {
+            width: 15%;
+        }
+
+        .case-listout td:nth-child(3),
+        .case-listout th:nth-child(3) {
+            width: 20%;
+        }
+
+        .case-listout td:last-child,
+        .case-listout th:last-child {
+            width: 55%;
+        }
+
+
+        .case-link {
+            color: #00adee;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .case-link:hover {
+            text-decoration: none;
+        }
     </style>
 </head>
 
 <body>
+    <!-- SIDEBAR ALWAYS ON -->
     <div id="sidebar" class="sidebar closed">
         <div class="sidebar-header">
             <span id="toggle-btn">&#9776;</span> <!-- hamburger -->
         </div>
         <div class="sidebar-content">
             <p>Hi, {{ user }}</p>
+            <a href="#" id="live-dashboard">Live Dashboard</a>
+            <a href="#" id="nav-cases">Cases</a>
             <form action="/logout" method="get">
                 <button type="submit">Logout</button>
             </form>
         </div>
     </div>
-    <!-- NEW WRAPPER -->
+    <!-- CASE LOAD VIEW -->
+    <div id="cases-view" class="main-content hidden">
+        <h2>Flagged Visitors / Cases</h2>
+        <table class="case-listout">
+            <tbody></tbody>
+        </table>
+    </div>
+    <!-- LIVE DASHBOARD VIEW -->
     <div id="main-content" class="main-content">
         <div class="tabs">
             <div class="tab active" onclick="showTab('visitors')">閲覧者情報</div>
@@ -533,7 +641,6 @@
             </div>
         </div>
     </div>
-
     <script src="/js/bundle.js"></script>
 </body>
 

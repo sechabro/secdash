@@ -215,6 +215,25 @@ async def visitor_flag(
     return await crud.visitor_flag_post(session=session, item=visitor)
 
 
+@app.get("/flagged-visitors")
+async def flagged_visitors(
+    request: Request,
+    session: SessionDep,
+    current_user: str = Depends(get_current_user)
+) -> list[schemas.VisitorsFlaggedSummary]:
+    return await crud.get_flagged_visitors(session=session)
+
+
+@app.get("/flagged-visitors/{case_id}")
+async def flagged_visitors(
+    case_id: int,
+    request: Request,
+    session: SessionDep,
+    current_user: str = Depends(get_current_user)
+) -> dict:
+    return await crud.get_flagged_visitor(session=session, case_id=case_id)
+
+
 @app.get("/visitors")
 async def visitor(
     request: Request,
@@ -318,7 +337,8 @@ async def token(
     return JSONResponse(content={
         "access_token": access_token,
         "token_type": "bearer"
-    })'''
+    })
+'''
 
 
 async def authenticate_user(session: SessionDep, email: str, password: str):

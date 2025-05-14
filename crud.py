@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import EmailStr
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
 import schemas
@@ -55,6 +56,52 @@ async def get_visitors(session: AsyncSession) -> list[schemas.VisitorInMem]:
         )
         for v in visitors
     ]
+
+
+async def get_flagged_visitors(session: AsyncSession) -> list[schemas.VisitorsFlaggedSummary]:
+    result = await session.execute(select(schemas.VisitorsFlagged))
+    flagged_visitors = result.scalars().all()
+
+    return [
+        schemas.VisitorsFlaggedSummary(
+            id=v.id,
+            visitor_id=v.visitor_id,
+            risk_level=v.risk_level,
+            created_at=v.created_at
+        )
+        for v in flagged_visitors
+    ]
+
+
+async def get_flagged_visitor(session: AsyncSession, case_id: int) -> schemas.VisitorsFlagged:
+    result = await session.execute(select(schemas.VisitorsFlagged).options(selectinload(schemas.VisitorsFlagged.visitor_info)).where(schemas.VisitorsFlagged.id == case_id))
+    flagged_visitor = result.scalars().one_or_none()
+
+    visitor = flagged_visitor.visitor_info
+
+    return {
+        "id": flagged_visitor.id,
+        "visitor_id": flagged_visitor.visitor_id,
+        "risk_level": flagged_visitor.risk_level,
+        "justification": flagged_visitor.justification,
+        "recommended_action": flagged_visitor.recommended_action,
+        "created_at": flagged_visitor.created_at.isoformat(),
+        "visitor_info": {
+            "id": visitor.id,
+            "username": visitor.username,
+            "acct_created": visitor.acct_created,
+            "ip": visitor.ip,
+            "port": visitor.port,
+            "device_info": visitor.device_info,
+            "browser_info": visitor.browser_info,
+            "is_bot": visitor.is_bot,
+            "geo_info": visitor.geo_info,
+            "ipdb": visitor.ipdb,
+            "last_active": visitor.last_active,
+            "time_idle": visitor.time_idle,
+            "is_active": visitor.is_active
+        } if visitor else None
+    }
 
 
 async def visitor_flag_post(session: AsyncSession, item: schemas.VisitorsFlagged) -> JSONResponse:
