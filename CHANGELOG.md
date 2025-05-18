@@ -60,3 +60,8 @@
 
 ### Changed:
 - `class VisitorsFlagged()` has been split into `class VisitorsFlaggedSummary()`, which returns an info-light list of all cases, and `class VisitorsFlagged()` which builds on top of `VisitorsFlaggedSummary()`, and is used for full case detail retrieval, as well as new case creation (still). Functional testing still successful.
+
+## [Unreleased] -  2025.05.17
+### Added:
+- `caseModal.js` Case Modal added with a "Suspend Account" action button, and Abuse IPDB information dropdown.
+

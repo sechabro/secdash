@@ -87,7 +87,6 @@ async def get_flagged_visitor(session: AsyncSession, case_id: int) -> schemas.Vi
         "recommended_action": flagged_visitor.recommended_action,
         "created_at": flagged_visitor.created_at.isoformat(),
         "visitor_info": {
-            "id": visitor.id,
             "username": visitor.username,
             "acct_created": visitor.acct_created,
             "ip": visitor.ip,
