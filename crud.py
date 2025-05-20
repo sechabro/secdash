@@ -102,6 +102,10 @@ async def get_flagged_visitor(session: AsyncSession, case_id: int) -> schemas.Vi
         } if visitor else None
     }
 
+# DRAGON [2025-05-19]: schemas.RiskLevel and schemas.ActionType functionality
+# Default risk value for schemas.VisitorsFlagged.risk_level should be set to
+# schemas.RiskLevel.flagged.
+
 
 async def visitor_flag_post(session: AsyncSession, item: schemas.VisitorsFlagged) -> JSONResponse:
     session.add(item)

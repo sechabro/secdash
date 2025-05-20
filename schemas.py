@@ -1,11 +1,31 @@
+import enum
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Annotated, List, Optional
 
 from pydantic import EmailStr
-from pydantic.types import StringConstraints
-from sqlalchemy import DateTime
-from sqlmodel import JSON, Column, Field, Relationship, SQLModel
+from sqlalchemy import JSON, DateTime
+from sqlalchemy import Enum as SAEnum
+from sqlmodel import Column, Field, Relationship, SQLModel
+
+# ------- ENUMERATED VALUES FOR DB-LEVEL CONSTRAINTS --------
+
+
+class RiskLevel(str, enum.Enum):
+    green = "green"
+    yellow = "yellow"
+    orange = "orange"
+    red = "red"
+    black = "black"
+
+
+class ActionType(str, enum.Enum):
+    none = "none"
+    under_review = "under_review"
+    flagged = "flagged"
+    suspended = "account_suspended"
+    auto_banned = "auto_banned"
+    manually_banned = "manually_banned"
 
 # ----------- VISITOR-RELATED CLASSES ------------
 
@@ -45,6 +65,10 @@ class VisitorInMem():
     is_active: bool
 
 # -------------- VISITOR CASE-RELATED CLASSES ---------------
+# DRAGON [2025-05-19]: Use RiskLevel and *possibly* ActionType enums.
+# Constrain risk-level str to RiskLevel class. Replace `justificaton`
+# column with `analysis`, for consistency. Add `action` column to display
+# the action taken against the case.
 
 
 class VisitorsFlaggedSummary(SQLModel):
@@ -61,6 +85,35 @@ class VisitorsFlagged(VisitorsFlaggedSummary, table=True):
     justification: str  # ai explanation
     recommended_action: str  # ai suggestion
     visitor_info: Optional[Visitor] = Relationship()
+
+# ------------ BOT LOGIN ATTEMPT-RELATED CLASSES ------------
+
+
+class FailedLoginRA(SQLModel):
+    analysis: Optional[str] = None
+    risk: Optional[RiskLevel] = Field(
+        default=None,
+        sa_column=Column(SAEnum(RiskLevel, name="risklevel_enum"))
+    )
+    action: ActionType = Field(
+        default=ActionType.none,
+        sa_column=Column(SAEnum(ActionType, name="actiontype_enum"))
+    )
+
+
+class FailedLoginIntel(FailedLoginRA, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    ip_address: str
+
+    server_attempts: Optional[List[dict]] = Field(
+        default_factory=list, sa_column=Column(JSON)
+    )
+
+    count: int = 0
+    first_seen: datetime
+    last_seen: datetime
+
+    ipdb: Optional[dict] = Field(default=None, sa_column=Column(JSON))
 
 # ----------- SYSTEM PERFORMANCE-RELATED CLASSES ------------
 

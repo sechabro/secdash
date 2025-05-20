@@ -65,3 +65,10 @@
 ### Added:
 - `caseModal.js` Case Modal added with a "Suspend Account" action button, and Abuse IPDB information dropdown.
 
+## [Unreleased] -  2025.05.19
+### Added:
+- Implemented `vps_login_monitor.sh` script to SSH into the VPS, parse recent failed SSH login attempts, and print structured CSV output (timestamp, IP, username, message).
+- Created a `FailedLoginIntel` table to collect details on repeat-offender ip addresses, and ultimately hand off to AI for further analysis.
+
+## [Unreleased] -  2025.05.20
+### Added:
