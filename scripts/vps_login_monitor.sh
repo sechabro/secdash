@@ -1,6 +1,6 @@
 #!/bin/bash
 ssh secdash-vps "
-    while true; do 
+    while true; do
         grep 'Failed password' /var/log/auth.log | 
         tail -n 20 | 
         awk '

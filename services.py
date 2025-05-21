@@ -1,16 +1,20 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from openai import OpenAI
-from schemas import VisitorInMem
-import os
 import json
+import os
+
+import httpx
 from dotenv import load_dotenv
+from fastapi import APIRouter, HTTPException
+from openai import OpenAI
+from pydantic import BaseModel
+
+from schemas import VisitorInMem
 
 load_dotenv()
 
-api_key = os.getenv("OPENKEY001")
+ipdb_key = os.getenv("IPDB")
+openai_key = os.getenv("OPENKEY001")
 # org = os.getenv("OPENORG")  # optional, for organization arg if needed
-client = OpenAI(api_key=api_key)
+client = OpenAI(api_key=openai_key)
 
 
 async def analyze_visitor(visitor: VisitorInMem):
@@ -45,3 +49,21 @@ async def analyze_visitor(visitor: VisitorInMem):
         return json.loads(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def ipabuse_check(ip: str):
+    url = "https://api.abuseipdb.com/api/v2/check"
+    headers = {
+        "Key": ipdb_key,
+        "Accept": "application/json"
+    }
+    params = {
+        "ipAddress": ip,
+        "maxAgeInDays": 90
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers, params=params)
+        response.raise_for_status()  # raises an error for bad responses
+
+    return response.json()

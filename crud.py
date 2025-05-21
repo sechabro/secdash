@@ -1,7 +1,8 @@
 import logging
 import os
 import shutil
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, tzinfo
 
 from fastapi import HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse
@@ -12,10 +13,11 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
 import schemas
+from database import async_session_maker
+from services import ipabuse_check
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-# import aiofiles
 
 
 async def visitor_info_post(session: AsyncSession, item: schemas.Visitor):
@@ -121,6 +123,80 @@ async def visitor_flag_post(session: AsyncSession, item: schemas.VisitorsFlagged
             "created_at": item.created_at.isoformat()
         }
     )
+
+
+async def upsert_failed_login_attempt(batch: list[list[str]]):
+    ip_groups = defaultdict(list)
+
+    for item in batch:
+        ip_groups[item[1]].append(item)
+    try:
+        async with async_session_maker() as session:
+            for ip, attempts in ip_groups.items():
+                result = await session.execute(
+                    select(schemas.FailedLoginIntel)
+                    .where(schemas.FailedLoginIntel.ip_address == ip)
+                )
+
+                row_exists = result.scalar_one_or_none()
+                new_attempts = [
+                    {
+                        "date": attempt[0],
+                        "user": attempt[2],
+                        "message": attempt[3]
+                    }
+                    for attempt in attempts
+                ]
+                if row_exists:
+                    updated_attempts = row_exists.server_attempts + new_attempts
+
+                    stmt = (
+                        update(schemas.FailedLoginIntel)
+                        .where(schemas.FailedLoginIntel.id == row_exists.id)
+                        .values(
+                            server_attempts=updated_attempts,
+                            count=len(updated_attempts),
+                            last_seen=datetime.fromisoformat(
+                                updated_attempts[-1].get("date")).replace(tzinfo=None)
+                        )
+                    )
+                    try:
+                        await session.execute(stmt)
+                        await session.commit()
+                        logger.info(
+                            f' New failed login attempt(s) from {ip} documented.'
+                        )
+                    except Exception as e:
+                        logger.error(f' Commit Failure {e}')
+                else:
+                    first_seen_ts = datetime.fromisoformat(
+                        new_attempts[0].get("date")).replace(tzinfo=None)
+                    last_seen_ts = datetime.fromisoformat(
+                        new_attempts[-1].get("date")).replace(tzinfo=None)
+                    try:
+                        ipdb_data = await ipabuse_check(ip)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to fetch AbuseIPDB data for {ip}: {e}")
+                        ipdb_data = None
+                    new_row = schemas.FailedLoginIntel(
+                        ip_address=ip,
+                        server_attempts=new_attempts,
+                        count=len(new_attempts),
+                        first_seen=first_seen_ts,
+                        last_seen=last_seen_ts,
+                        ipdb=ipdb_data
+                    )
+                    try:
+                        session.add(new_row)
+                        await session.commit()
+                        logger.info(
+                            f' New IP logged: {ip} — failed login attempt recorded.'
+                        )
+                    except Exception as e:
+                        logger.error(f' Commit Failure: {e}')
+    except Exception as e:
+        logger.error(f' Session Failure: {e}')
 
 
 async def shutdown_db_update(session: AsyncSession, visitor_list: list) -> bool:

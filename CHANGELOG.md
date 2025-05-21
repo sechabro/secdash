@@ -70,5 +70,11 @@
 - Implemented `vps_login_monitor.sh` script to SSH into the VPS, parse recent failed SSH login attempts, and print structured CSV output (timestamp, IP, username, message).
 - Created a `FailedLoginIntel` table to collect details on repeat-offender ip addresses, and ultimately hand off to AI for further analysis.
 
-## [Unreleased] -  2025.05.20
+## [Unreleased] -  2025.05.21
 ### Added:
+- `crud.py` function `upsert_failed_login_attempt()` to batch process failed login lines per IP, checking for existing rows and appending attempts. State managed to prevent duplicate writes and needless requests.
+
+### Changed:
+- AbuseIPDB enrichment implemented using `ipabuse_check()` in new `services.py` file (function moved from `utils.py`).
+- Migrated AI analysis `analyze_user()` to `services.py` and removed `visitor_analysis.py`
+- Server-level ssh config file settings altered to permit login via key only: `PasswordAuthentication no`, `ChallengeResponseAuthentication no`, `UsePAM no`.

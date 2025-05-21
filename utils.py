@@ -10,9 +10,9 @@ from collections import defaultdict, deque
 from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime
 from functools import reduce
+from ipaddress import ip_address
 from typing import Any, Callable
 
-import httpx
 import psutil
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
@@ -25,9 +25,9 @@ from sqlmodel import Session
 from user_agents import parse
 
 from crud import (get_user_by_email, get_visitors, shutdown_db_update,
-                  visitor_info_post)
+                  upsert_failed_login_attempt, visitor_info_post)
 from database import async_session_maker
-from schemas import IoStatLineInMem, Visitor
+from schemas import FailedLoginIntel, IoStatLineInMem, Visitor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,14 +35,15 @@ psh = PasswordHasher()
 
 # DB Reader
 db_reader = database.Reader('./GeoLite2-City.mmdb')
-IPDB = str(os.getenv('IPDB', default=None))
 
 # Datastreams
 iostats = deque(maxlen=30)
 running_ps = deque()
 visitors = deque()
+ssh_lines = deque(maxlen=20)
 ps_lock = threading.Lock()
 visitor_lock = threading.Lock()
+ssh_lock = threading.Lock()
 
 
 def block_ip(ip):
@@ -230,6 +231,7 @@ async def ps_stream(script: str | None = None):
     processes = await run_script(script=script)
 
     try:
+        logger.info(f' Process stream starting.')
         ps_deque_swap = deque()
         async for line in processes.stdout:
             line_strip = line.decode().strip()
@@ -263,6 +265,7 @@ async def ps_stream(script: str | None = None):
 async def io_stream(script: str | None = None):
     iostat_data = await run_script(script=script)
     try:
+        logger.info(f' Iostat stream starting.')
         async for line in iostat_data.stdout:
             (date, time, kbt, tps, mbs, user, sys, idle,
              load) = line.decode().strip().split(",")
@@ -283,6 +286,49 @@ async def io_stream(script: str | None = None):
         print("Stopping...")
         iostat_data.terminate()
 
+################################################################
+##### FAILED ###################################################
+########## SSH #################################################
+############ LOGIN #############################################
+################ STREAM ########################################
+
+
+async def ssh_stream(script: str | None = None):
+    global ssh_lines
+
+    ssh_data = await run_script(script=script)
+    try:
+        logger.info(f' Ssh stream starting.')
+        new_ssh_lines = deque()
+        listener_note = False
+        async for line in ssh_data.stdout:
+            decode = line.decode().strip()
+            if decode == "END":
+                old_snapshot = list(ssh_lines)
+                new_snapshot = list(new_ssh_lines)
+                if new_snapshot != old_snapshot:
+                    new_crud_lines = [
+                        line for line in new_snapshot if line not in old_snapshot]
+                    logger.info(
+                        f' 🌐 {len(new_crud_lines)} new ssh attempt(s) detected.')
+                    await upsert_failed_login_attempt(batch=new_crud_lines)
+                    with ssh_lock:
+                        ssh_lines.clear()
+                        ssh_lines.extend(new_ssh_lines)
+                    listener_note = True
+                elif listener_note:
+                    logger.info(" Listening for new ssh attempts... 📡")
+                    listener_note = False
+                new_ssh_lines.clear()
+            else:
+                decode_split = [val.strip()
+                                for val in decode.split(",", maxsplit=3)]
+                if len(decode_split) == 4:
+                    new_ssh_lines.append(decode_split)
+
+    except KeyboardInterrupt:
+        print("Stopping SSH Monitor...")
+        ssh_data.terminate()
 
 ####### VISITOR ################################################
 ######## ACTIVITY ##############################################
@@ -293,6 +339,7 @@ async def io_stream(script: str | None = None):
 # generated for demo purposes. Abuse IPDB data is also generated,
 # to avoid potential issues with over-calling their api in short-
 # timespans.
+
 
 async def visitor_stream(visitor_list: list | None = None):
     global visitors
@@ -384,24 +431,6 @@ async def persist_visitors() -> bool:
             updates = list(visitors)
             shutdown_update = await shutdown_db_update(session=session, visitor_list=updates)
             return shutdown_update
-
-
-async def ipabuse_check(ip: str):
-    url = "https://api.abuseipdb.com/api/v2/check"
-    headers = {
-        "Key": IPDB,
-        "Accept": "application/json"
-    }
-    params = {
-        "ipAddress": ip,
-        "maxAgeInDays": 90
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers=headers, params=params)
-        response.raise_for_status()  # raises an error for bad responses
-
-    return response.json()
 
 
 async def host_info_async() -> dict:

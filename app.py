@@ -22,11 +22,11 @@ import crud
 import schemas
 from database import (async_session_maker, create_tables, database_check,
                       get_session, temp_sync_engine)
+from services import analyze_visitor
 from utils import (established_connections, host_info_async, io_stream,
                    iostats, password_hasher, password_verify, persist_visitors,
-                   ps_stream, running_ps, stream_delivery,
+                   ps_stream, running_ps, ssh_stream, stream_delivery,
                    visitor_activity_gen, visitor_stream, visitors)
-from visitor_analysis import analyze_visitor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -80,6 +80,9 @@ async def on_startup():
         io_stream(script="./scripts/iostat_logger.sh"))
     app.state.ps_task = asyncio.create_task(
         ps_stream(script="./scripts/ps_logger.sh"))
+    app.state.ssh_task = asyncio.create_task(
+        ssh_stream(script="./scripts/vps_login_monitor.sh")
+    )
     logger.info(f' System metrics streaming started...')
     app.state.visitor_task = asyncio.create_task(
         visitor_activity_gen())
@@ -90,6 +93,8 @@ async def on_startup():
 async def shutdown_async():
     app.state.iostat_task.cancel()
     app.state.ps_task.cancel()
+    app.state.ssh_task.cancel()
+    logger.info(f' System metrics streams stopped...')
     data_persist = await persist_visitors()
     if not data_persist:
         logger.info(f' DB update failed. Shutting down sadly...')
