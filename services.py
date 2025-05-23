@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 
@@ -7,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel
 
-from schemas import VisitorInMem
+from schemas import FailedLoginInMem, VisitorInMem
 
 load_dotenv()
 
@@ -51,6 +52,68 @@ async def analyze_visitor(visitor: VisitorInMem):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
+    prompt = f"""
+    You are an AI security analyst. The following information
+    contains details about an IP address's SSH attempts against 
+    a private VPS, as well as intel from Abuse IPDB. Evaluate 
+    it and return a JSON object with:
+
+    - "risk_level" (green, yellow, orange, red, black)
+    - "analysis" (explain your reasoning)
+    - "recommended_action" (none, review, flag, ban, autoban)
+
+    Avoid assigning contradictory combinations such as:
+    - risk_level: green or yellow → recommended_action: ban or autoban
+    - risk_level: black → recommended_action: none or review
+
+    The action should escalate proportionally to the risk.
+
+    IP Address Intel:
+    IP Address: {ip.ip}
+    Abuse IPDB abuseConfidenceScore: {ip.score}
+    Abuse IPDB isTor: {ip.is_tor}
+    Abuse IPDB totalReports: {ip.total_reports}
+    First attempt date: {ip.first_seen}
+    Last attempt date: {ip.last_seen}
+    Total attempts: {ip.count}
+    """
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        return json.loads(response.choices[0].message.content.strip())
+    except Exception as e:
+        return {"error": str(e), "ip_info": ip}
+
+ip_1 = FailedLoginInMem(
+    ip="170.64.183.222",
+    score=100,
+    is_tor=False,
+    total_reports=340,
+    first_seen="2025-05-21 13:09:35.609629",
+    last_seen="2025-05-21 13:28:47.205986",
+    count=234
+)
+
+ip_2 = FailedLoginInMem(
+    ip="49.64.85.138",
+    score=100,
+    is_tor=False,
+    total_reports=2691,
+    first_seen="2025-05-21 12:49:35.532544",
+    last_seen="2025-05-21 12:49:35.532544",
+    count=3
+)
+
+
+async def ip_analysis_gathering(ip_info=[ip_1, ip_2]) -> list[dict]:
+    tasks = [analyze_ip_address(ip) for ip in ip_info]
+    return await asyncio.gather(*tasks)
+
+
 async def ipabuse_check(ip: str):
     url = "https://api.abuseipdb.com/api/v2/check"
     headers = {
@@ -67,3 +130,6 @@ async def ipabuse_check(ip: str):
         response.raise_for_status()  # raises an error for bad responses
 
     return response.json()
+
+
+# async await ip_analysis_gathering(ip_info=[])

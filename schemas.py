@@ -115,6 +115,18 @@ class FailedLoginIntel(FailedLoginRA, table=True):
 
     ipdb: Optional[dict] = Field(default=None, sa_column=Column(JSON))
 
+
+@dataclass(slots=True, order=False)
+class FailedLoginInMem:
+    ip: str  # ip address in question
+    score: int  # IPDB Abuse Confidence Score
+    is_tor: bool  # IPDB isTor value
+    total_reports: int  # IPDB report tally
+    first_seen: str  # first attempt against server
+    last_seen: str  # last attempt against server
+    count: int  # total attempts on this server at time of analysis
+
+
 # ----------- SYSTEM PERFORMANCE-RELATED CLASSES ------------
 
 
