@@ -1,0 +1,156 @@
+import asyncio
+import json
+import os
+
+import httpx
+from dotenv import load_dotenv
+from fastapi import APIRouter, HTTPException
+from openai import OpenAI
+from pydantic import BaseModel
+
+from schemas import FailedLoginInMem, VisitorInMem
+
+load_dotenv()
+
+ipdb_key = os.getenv("IPDB")
+openai_key = os.getenv("OPENKEY001")
+# org = os.getenv("OPENORG")  # optional, for organization arg if needed
+client = OpenAI(api_key=openai_key)
+
+
+async def analyze_visitor(visitor: VisitorInMem):
+    prompt = f"""
+    You are an AI security analyst. Evaluate the following visitor activity and return a JSON object with:
+    - "risk_level" (low, medium, or high)
+    - "justification"
+    - "recommended_action"
+
+    Visitor Details:
+    Username: {visitor.username}
+    Account Created: {visitor.acct_created}
+    IP: {visitor.ip}
+    Port: {visitor.port}
+    Device Info: {visitor.device_info}
+    Browser Info: {visitor.browser_info}
+    Is Bot: {visitor.is_bot}
+    Geo Info: {visitor.geo_info}
+    AbuseIPDB isTor: {visitor.ipdb}
+    Last Active: {visitor.last_active}
+    Time Idle (seconds): {visitor.time_idle}
+    Is Currently Active: {visitor.is_active}
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        result = response.choices[0].message.content.strip()
+        return json.loads(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
+    prompt = f"""
+    You are an AI security analyst. The following information
+    contains details about an IP address's SSH attempts against 
+    a private VPS, as well as intel from Abuse IPDB. Evaluate 
+    it and return only a valid JSON object matching this schema.
+
+    Example:
+    {{
+      "risk_level": "red",
+      "analysis": "...",
+      "recommended_action": "ban"
+    }}:
+
+    Permitted values per key:
+    - "risk_level" (green, yellow, orange, red, black)
+    - "analysis" (explain your reasoning)
+    - "recommended_action" (none, review, flag, ban, autoban)
+
+    Adhere to this table for permitted risk_level
+    and recommended_action pairs:
+
+    | Risk Level | Allowed Actions           |
+    |------------|---------------------------|
+    | black      | autoban                   |
+    | red        | flag, ban                 |
+    | orange     | review, flag              |
+    | yellow     | review                    |
+    | green      | none                      |
+
+    Do not include any markdown formatting.
+
+    IP Address Intel:
+    IP Address: {ip.ip}
+    Abuse IPDB abuseConfidenceScore: {ip.score}
+    Abuse IPDB isTor: {ip.is_tor}
+    Abuse IPDB totalReports: {ip.total_reports}
+    First attempt date: {ip.first_seen}
+    Last attempt date: {ip.last_seen}
+    Total attempts: {ip.count}
+    """
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        return json.loads(response.choices[0].message.content.strip())
+    except Exception as e:
+        return {"error": str(e), "ip_info": ip}
+
+# DRAGON [2025-05-23]: scaling issue with asyncio.gather()
+# It might be necessary to replace asyncio.gather() if too many
+# items are added at once. Consider asyncio.Queue, asyncio.Semaphore.
+# Monitor for now.
+async def ip_analysis_gathering(ip_info: list[FailedLoginInMem]) -> list[dict]:
+    tasks = [analyze_ip_address(ip) for ip in ip_info]
+    return await asyncio.gather(*tasks)
+
+
+async def ipabuse_check(ip: str):
+    url = "https://api.abuseipdb.com/api/v2/check"
+    headers = {
+        "Key": ipdb_key,
+        "Accept": "application/json"
+    }
+    params = {
+        "ipAddress": ip,
+        "maxAgeInDays": 90
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers, params=params)
+        response.raise_for_status()  # raises an error for bad responses
+
+    return response.json()
+
+
+
+
+'''if __name__ == "__main__":
+    ip_1 = FailedLoginInMem(
+    ip="170.64.183.222",
+    score=100,
+    is_tor=False,
+    total_reports=340,
+    first_seen="2025-05-21 13:09:35.609629",
+    last_seen="2025-05-21 13:28:47.205986",
+    count=234
+)
+
+    ip_2 = FailedLoginInMem(
+    ip="49.64.85.138",
+    score=100,
+    is_tor=False,
+    total_reports=2691,
+    first_seen="2025-05-21 12:49:35.532544",
+    last_seen="2025-05-21 12:49:35.532544",
+    count=3
+)
+    results = asyncio.run(ip_analysis_gathering(ip_info=[ip_1, ip_2]))
+    print(results)'''

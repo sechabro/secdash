@@ -1,3 +1,5 @@
+import { showCaseDetails } from "./caseModal";
+
 export async function fetchCaseLoad() {
     const connRes = await fetch('/flagged-visitors');
     const connData = await connRes.json();
@@ -29,6 +31,9 @@ export async function fetchCaseLoad() {
         const createDateData = document.createElement('td');
 
         caseIDData.innerHTML = `<span class="case-link" data-case-id="${row.id}">${row.id}</span>`;
+        caseIDData.querySelector(".case-link").addEventListener("click", () => {
+            showCaseDetails(row.id);
+        });
         visitorIDData.textContent = row.visitor_id;
         riskData.textContent = row.risk_level;
         createDateData.textContent = row.created_at;

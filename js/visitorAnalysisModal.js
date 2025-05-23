@@ -3,7 +3,7 @@ import { startCase } from './flagAccount.js';
 export async function showVisitorAnalysis(visitor) {
     const modal = document.getElementById("analysis-modal");
     const content = document.querySelector(".modal-content");
-    const spinner = document.getElementById("analysis-loading");
+    const spinner = document.getElementById("wait-spinner-analysis");
     const riskLevelSpan = document.getElementById("risk-level");
     const justificationSpan = document.getElementById("justification");
     const actionSpan = document.getElementById("recommended-action");

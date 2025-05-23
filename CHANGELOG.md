@@ -60,3 +60,30 @@
 
 ### Changed:
 - `class VisitorsFlagged()` has been split into `class VisitorsFlaggedSummary()`, which returns an info-light list of all cases, and `class VisitorsFlagged()` which builds on top of `VisitorsFlaggedSummary()`, and is used for full case detail retrieval, as well as new case creation (still). Functional testing still successful.
+
+## [Unreleased] -  2025.05.17
+### Added:
+- `caseModal.js` Case Modal added with a "Suspend Account" action button, and Abuse IPDB information dropdown.
+
+## [Unreleased] -  2025.05.19
+### Added:
+- Implemented `vps_login_monitor.sh` script to SSH into the VPS, parse recent failed SSH login attempts, and print structured CSV output (timestamp, IP, username, message).
+- Created a `FailedLoginIntel` table to collect details on repeat-offender ip addresses, and ultimately hand off to AI for further analysis.
+
+## [Unreleased] -  2025.05.21
+### Added:
+- `crud.py` function `upsert_failed_login_attempt()` to batch process failed login lines per IP, checking for existing rows and appending attempts. State managed to prevent duplicate writes and needless requests.
+
+### Changed:
+- AbuseIPDB enrichment implemented using `ipabuse_check()` in new `services.py` file (function moved from `utils.py`).
+- Migrated AI analysis `analyze_user()` to `services.py` and removed `visitor_analysis.py`
+- Server-level ssh config file settings altered to permit login via key only: `PasswordAuthentication no`, `ChallengeResponseAuthentication no`, `UsePAM no`.
+
+## [Unreleased] - 2025.05.23
+### Added:
+- `ip_analysis_gathering() -> analyze_ip_address()` AI analysis workflow added to `services.py`. Dragon note regarding asyncio.gather() scaleability added, but for current purposes, works very well as-is.
+- `FailedLoginInMem` dataclass added for faster handling of IP address intel handling during analysis. 
+- `/ban-ip` endpoint added for manual ip bans.
+
+### Changed:
+- `block_ip()` is now `ip_to_blacklist()` in `utils.py`.
