@@ -78,3 +78,12 @@
 - AbuseIPDB enrichment implemented using `ipabuse_check()` in new `services.py` file (function moved from `utils.py`).
 - Migrated AI analysis `analyze_user()` to `services.py` and removed `visitor_analysis.py`
 - Server-level ssh config file settings altered to permit login via key only: `PasswordAuthentication no`, `ChallengeResponseAuthentication no`, `UsePAM no`.
+
+## [Unreleased] - 2025.05.23
+### Added:
+- `ip_analysis_gathering() -> analyze_ip_address()` AI analysis workflow added to `services.py`. Dragon note regarding asyncio.gather() scaleability added, but for current purposes, works very well as-is.
+- `FailedLoginInMem` dataclass added for faster handling of IP address intel handling during analysis. 
+- `/ban-ip` endpoint added for manual ip bans.
+
+### Changed:
+- `block_ip()` is now `ip_to_blacklist()` in `utils.py`.

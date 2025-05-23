@@ -57,17 +57,32 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
     You are an AI security analyst. The following information
     contains details about an IP address's SSH attempts against 
     a private VPS, as well as intel from Abuse IPDB. Evaluate 
-    it and return a JSON object with:
+    it and return only a valid JSON object matching this schema.
 
+    Example:
+    {{
+      "risk_level": "red",
+      "analysis": "...",
+      "recommended_action": "ban"
+    }}:
+
+    Permitted values per key:
     - "risk_level" (green, yellow, orange, red, black)
     - "analysis" (explain your reasoning)
     - "recommended_action" (none, review, flag, ban, autoban)
 
-    Avoid assigning contradictory combinations such as:
-    - risk_level: green or yellow → recommended_action: ban or autoban
-    - risk_level: black → recommended_action: none or review
+    Adhere to this table for permitted risk_level
+    and recommended_action pairs:
 
-    The action should escalate proportionally to the risk.
+    | Risk Level | Allowed Actions           |
+    |------------|---------------------------|
+    | black      | autoban                   |
+    | red        | flag, ban                 |
+    | orange     | review, flag              |
+    | yellow     | review                    |
+    | green      | none                      |
+
+    Do not include any markdown formatting.
 
     IP Address Intel:
     IP Address: {ip.ip}
@@ -79,7 +94,7 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
     Total attempts: {ip.count}
     """
     try:
-        response = await client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
@@ -88,28 +103,11 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
     except Exception as e:
         return {"error": str(e), "ip_info": ip}
 
-ip_1 = FailedLoginInMem(
-    ip="170.64.183.222",
-    score=100,
-    is_tor=False,
-    total_reports=340,
-    first_seen="2025-05-21 13:09:35.609629",
-    last_seen="2025-05-21 13:28:47.205986",
-    count=234
-)
-
-ip_2 = FailedLoginInMem(
-    ip="49.64.85.138",
-    score=100,
-    is_tor=False,
-    total_reports=2691,
-    first_seen="2025-05-21 12:49:35.532544",
-    last_seen="2025-05-21 12:49:35.532544",
-    count=3
-)
-
-
-async def ip_analysis_gathering(ip_info=[ip_1, ip_2]) -> list[dict]:
+# DRAGON [2025-05-23]: scaling issue with asyncio.gather()
+# It might be necessary to replace asyncio.gather() if too many
+# items are added at once. Consider asyncio.Queue, asyncio.Semaphore.
+# Monitor for now.
+async def ip_analysis_gathering(ip_info: list[FailedLoginInMem]) -> list[dict]:
     tasks = [analyze_ip_address(ip) for ip in ip_info]
     return await asyncio.gather(*tasks)
 
@@ -132,4 +130,27 @@ async def ipabuse_check(ip: str):
     return response.json()
 
 
-# async await ip_analysis_gathering(ip_info=[])
+
+
+'''if __name__ == "__main__":
+    ip_1 = FailedLoginInMem(
+    ip="170.64.183.222",
+    score=100,
+    is_tor=False,
+    total_reports=340,
+    first_seen="2025-05-21 13:09:35.609629",
+    last_seen="2025-05-21 13:28:47.205986",
+    count=234
+)
+
+    ip_2 = FailedLoginInMem(
+    ip="49.64.85.138",
+    score=100,
+    is_tor=False,
+    total_reports=2691,
+    first_seen="2025-05-21 12:49:35.532544",
+    last_seen="2025-05-21 12:49:35.532544",
+    count=3
+)
+    results = asyncio.run(ip_analysis_gathering(ip_info=[ip_1, ip_2]))
+    print(results)'''

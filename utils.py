@@ -46,7 +46,7 @@ visitor_lock = threading.Lock()
 ssh_lock = threading.Lock()
 
 
-def block_ip(ip):
+def ip_to_blacklist(ip):
     '''Install ipset: sudo apt-get install ipset -y
     sudo ipset create blacklist hash:ip
     By default, ipset rules won't persist across reboots. To make the blacklist persistent:

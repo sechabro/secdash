@@ -24,9 +24,10 @@ from database import (async_session_maker, create_tables, database_check,
                       get_session, temp_sync_engine)
 from services import analyze_visitor
 from utils import (established_connections, host_info_async, io_stream,
-                   iostats, password_hasher, password_verify, persist_visitors,
-                   ps_stream, running_ps, ssh_stream, stream_delivery,
-                   visitor_activity_gen, visitor_stream, visitors)
+                   iostats, ip_to_blacklist, password_hasher, password_verify,
+                   persist_visitors, ps_stream, running_ps, ssh_stream,
+                   stream_delivery, visitor_activity_gen, visitor_stream,
+                   visitors)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -202,6 +203,12 @@ async def connections(current_user: str = Depends(get_current_user)) -> list:
 async def host_status(current_user: str = Depends(get_current_user)) -> dict:
     return await host_info_async()
 
+@app.post("/ban-ip")
+async def ban_ip(
+    ip: schemas.FailedLoginInMem,
+    current_user: str = Depends(get_current_user)
+) -> JSONResponse:
+    return await ip_to_blacklist(ip=ip.ip)
 
 @app.post("/visitor-analysis")
 async def visitor_analysis(

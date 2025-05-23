@@ -100,7 +100,8 @@ class FailedLoginRA(SQLModel):
         sa_column=Column(SAEnum(ActionType, name="actiontype_enum"))
     )
 
-
+# DRAGON [2025-05-23]: need a `status` field to indicate banned.
+# Necessary to know the current state of the ip address in question.
 class FailedLoginIntel(FailedLoginRA, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     ip_address: str
