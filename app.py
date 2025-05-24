@@ -84,6 +84,9 @@ async def on_startup():
     app.state.ssh_task = asyncio.create_task(
         ssh_stream(script="./scripts/vps_login_monitor.sh")
     )
+    app.state.ips_task = asyncio.create_task(
+        crud.get_unanalyzed_ips()
+    )
     logger.info(f' System metrics streaming started...')
     app.state.visitor_task = asyncio.create_task(
         visitor_activity_gen())
@@ -95,6 +98,7 @@ async def shutdown_async():
     app.state.iostat_task.cancel()
     app.state.ps_task.cancel()
     app.state.ssh_task.cancel()
+    app.state.ips_task.cancel()
     logger.info(f' System metrics streams stopped...')
     data_persist = await persist_visitors()
     if not data_persist:

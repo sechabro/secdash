@@ -1,6 +1,6 @@
 import enum
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
 from pydantic import EmailStr
@@ -21,11 +21,15 @@ class RiskLevel(str, enum.Enum):
 
 class ActionType(str, enum.Enum):
     none = "none"
-    under_review = "under_review"
     flagged = "flagged"
-    suspended = "account_suspended"
-    auto_banned = "auto_banned"
-    manually_banned = "manually_banned"
+    suspend = "suspend"
+    ban = "ban"
+    autoban = "autobanned"
+    
+class CurrentStatus(str, enum.Enum):
+    active = "active"
+    suspended = "suspended"
+    banned = "banned"
 
 # ----------- VISITOR-RELATED CLASSES ------------
 
@@ -100,8 +104,6 @@ class FailedLoginRA(SQLModel):
         sa_column=Column(SAEnum(ActionType, name="actiontype_enum"))
     )
 
-# DRAGON [2025-05-23]: need a `status` field to indicate banned.
-# Necessary to know the current state of the ip address in question.
 class FailedLoginIntel(FailedLoginRA, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     ip_address: str
@@ -115,7 +117,14 @@ class FailedLoginIntel(FailedLoginRA, table=True):
     last_seen: datetime
 
     ipdb: Optional[dict] = Field(default=None, sa_column=Column(JSON))
-
+    status: CurrentStatus = Field(
+        default=CurrentStatus.active,
+        sa_column=Column(SAEnum(CurrentStatus, name="currentstatus_enum"))
+    )
+    status_change_date: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True)) 
+    )
 
 @dataclass(slots=True, order=False)
 class FailedLoginInMem:

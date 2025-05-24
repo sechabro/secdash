@@ -61,15 +61,16 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
 
     Example:
     {{
+      "ip_address": "{ip.ip}",
       "risk_level": "red",
       "analysis": "...",
       "recommended_action": "ban"
     }}:
 
     Permitted values per key:
-    - "risk_level" (green, yellow, orange, red, black)
-    - "analysis" (explain your reasoning)
-    - "recommended_action" (none, review, flag, ban, autoban)
+    - "risk_level" one of ["green", "yellow", "orange", "red", "black"]
+    - "analysis" (a short but clear explanation justifying the action)
+    - "recommended_action" one of ["none", "flagged", "suspend", "ban", "autoban"]
 
     Adhere to this table for permitted risk_level
     and recommended_action pairs:
@@ -77,8 +78,8 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
     | Risk Level | Allowed Actions           |
     |------------|---------------------------|
     | black      | autoban                   |
-    | red        | flag, ban                 |
-    | orange     | review, flag              |
+    | red        | suspend, ban              |
+    | orange     | flag, suspend             |
     | yellow     | review                    |
     | green      | none                      |
 
@@ -127,7 +128,7 @@ async def ipabuse_check(ip: str):
         response = await client.get(url, headers=headers, params=params)
         response.raise_for_status()  # raises an error for bad responses
 
-    return response.json()
+    return response.json().get("data", {})
 
 
 

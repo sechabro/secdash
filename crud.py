@@ -1,8 +1,9 @@
+import asyncio
 import logging
 import os
-import shutil
 from collections import defaultdict
-from datetime import datetime, tzinfo
+from datetime import datetime, timezone, tzinfo
+from time import sleep
 
 from fastapi import HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse
@@ -14,7 +15,7 @@ from sqlmodel import select
 
 import schemas
 from database import async_session_maker
-from services import ipabuse_check
+from services import ip_analysis_gathering, ipabuse_check
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -125,6 +126,10 @@ async def visitor_flag_post(session: AsyncSession, item: schemas.VisitorsFlagged
     )
 
 
+# DRAGON [2025-05-24]: function refactor for only one commit
+# Currently 1 or more commits per session, since it's inside
+# the for-loop. Need to refactor appropriately so that commit
+# only happens once: after all statement executions are done.
 async def upsert_failed_login_attempt(batch: list[list[str]]):
     ip_groups = defaultdict(list)
 
@@ -198,6 +203,67 @@ async def upsert_failed_login_attempt(batch: list[list[str]]):
     except Exception as e:
         logger.error(f' Session Failure: {e}')
 
+
+async def ai_analysis_update(ip_updates: list[dict]):
+    async with async_session_maker() as session:
+        try:
+            successful = 0
+            for entry in ip_updates:
+                stmt = (
+                    update(schemas.FailedLoginIntel)
+                    .where(schemas.FailedLoginIntel.ip_address == entry.get("ip_address"))
+                    .values(
+                        analysis=entry["analysis"],
+                        risk=schemas.RiskLevel(entry["risk_level"]),
+                        action=schemas.ActionType(entry["recommended_action"]),
+                        status_change_date=datetime.now(timezone.utc)
+                    )
+                )
+                try:
+                    await session.execute(stmt)
+                    logger.info(
+                        f' Analysis for {entry.get("ip_address")} completed. Update successful.'
+                    )
+                    successful += 1
+                except Exception as e:
+                    logger.error(f' Failed to execute update for {entry.get("ip_address")} {e}')
+            await session.commit()
+        except Exception as e:
+            logger.error(f' Session Failure: {e}')
+
+async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
+    print("get_unanalyzed_ips triggered")
+    try:
+        logger.info(f' SSH monitoring started')
+        while True:
+            async with async_session_maker() as session:
+                stmt = select(schemas.FailedLoginIntel).where(
+                    (schemas.FailedLoginIntel.analysis == None) |
+                    (schemas.FailedLoginIntel.risk == None) |
+                    (schemas.FailedLoginIntel.action == schemas.ActionType.none)
+                )
+                results = (await session.execute(stmt)).scalars().all()
+                
+                for_analysis = [
+                    schemas.FailedLoginInMem(
+                        ip=result.ip_address,
+                        score=result.ipdb.get("abuseConfidenceScore"),
+                        is_tor=result.ipdb.get("isTor"),
+                        total_reports=result.ipdb.get("totalReports"),
+                        first_seen=result.first_seen.isoformat(),
+                        last_seen=result.last_seen.isoformat(),
+                        count=result.count
+                    )
+                    for result in results
+                    if result.ipdb is not None
+                ]
+
+                analyzed_ips = await ip_analysis_gathering(ip_info=for_analysis)
+                await ai_analysis_update(ip_updates=analyzed_ips)
+                await asyncio.sleep(60)
+    
+    except Exception as e:
+        logger.error(f' 🤮 IP analysis loop crashed: {e}')
 
 async def shutdown_db_update(session: AsyncSession, visitor_list: list) -> bool:
     try:
