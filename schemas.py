@@ -25,7 +25,8 @@ class ActionType(str, enum.Enum):
     suspend = "suspend"
     ban = "ban"
     autoban = "autobanned"
-    
+
+
 class CurrentStatus(str, enum.Enum):
     active = "active"
     suspended = "suspended"
@@ -104,6 +105,7 @@ class FailedLoginRA(SQLModel):
         sa_column=Column(SAEnum(ActionType, name="actiontype_enum"))
     )
 
+
 class FailedLoginIntel(FailedLoginRA, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     ip_address: str
@@ -123,8 +125,9 @@ class FailedLoginIntel(FailedLoginRA, table=True):
     )
     status_change_date: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        sa_column=Column(DateTime(timezone=True)) 
+        sa_column=Column(DateTime(timezone=True))
     )
+
 
 @dataclass(slots=True, order=False)
 class FailedLoginInMem:
@@ -132,9 +135,15 @@ class FailedLoginInMem:
     score: int  # IPDB Abuse Confidence Score
     is_tor: bool  # IPDB isTor value
     total_reports: int  # IPDB report tally
-    first_seen: str  # first attempt against server
-    last_seen: str  # last attempt against server
     count: int  # total attempts on this server at time of analysis
+    country: str | None = None
+    first_seen: str | None = None  # first attempt against server
+    last_seen: str | None = None  # last attempt against server
+
+
+class FailedLoginIPBan(SQLModel):
+    ip: str
+    status: str
 
 
 # ----------- SYSTEM PERFORMANCE-RELATED CLASSES ------------

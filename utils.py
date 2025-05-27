@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import random
-import subprocess
 import threading
 import time
 from collections import defaultdict, deque
@@ -44,28 +43,6 @@ ssh_lines = deque(maxlen=20)
 ps_lock = threading.Lock()
 visitor_lock = threading.Lock()
 ssh_lock = threading.Lock()
-
-
-def ip_to_blacklist(ip):
-    '''Install ipset: sudo apt-get install ipset -y
-    sudo ipset create blacklist hash:ip
-    By default, ipset rules won't persist across reboots. To make the blacklist persistent:
-    sudo ipset save > /etc/ipset.rules
-    Ensure that ipset restores the rules after a reboot: sudo nano /etc/rc.local
-    Add this line before exit 0: ipset restore < /etc/ipset.rules
-    command to list out ipset info for your blacklist: sudo ipset list blacklist'''
-
-    # Adds an IP to ipset's blacklist.
-    try:
-        # Add IP to the blacklist set
-        subprocess.run(["sudo", "ipset", "add", "blacklist", ip], check=True)
-
-        print(f"Blocked IP: {ip} using ipset.")
-        return {"status": "success", "action": "block_ip", "ip": ip}
-
-    except subprocess.CalledProcessError as e:
-        print(f"Error blocking IP {ip}: {e}")
-        return {"status": "failure", "error": str(e)}
 
 
 async def locale_formatting(client_ip: str) -> str:

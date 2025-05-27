@@ -22,12 +22,12 @@ import crud
 import schemas
 from database import (async_session_maker, create_tables, database_check,
                       get_session, temp_sync_engine)
+from ipset import ipset_calls
 from services import analyze_visitor
 from utils import (established_connections, host_info_async, io_stream,
-                   iostats, ip_to_blacklist, password_hasher, password_verify,
-                   persist_visitors, ps_stream, running_ps, ssh_stream,
-                   stream_delivery, visitor_activity_gen, visitor_stream,
-                   visitors)
+                   iostats, password_hasher, password_verify, persist_visitors,
+                   ps_stream, running_ps, ssh_stream, stream_delivery,
+                   visitor_activity_gen, visitor_stream, visitors)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -207,12 +207,26 @@ async def connections(current_user: str = Depends(get_current_user)) -> list:
 async def host_status(current_user: str = Depends(get_current_user)) -> dict:
     return await host_info_async()
 
+
 @app.post("/ban-ip")
 async def ban_ip(
-    ip: schemas.FailedLoginInMem,
+    session: SessionDep,
+    ip: schemas.FailedLoginIPBan,
     current_user: str = Depends(get_current_user)
 ) -> JSONResponse:
-    return await ip_to_blacklist(ip=ip.ip)
+    result = await run_in_threadpool(ipset_calls, ip=ip.ip)
+    row_update = await crud.ip_status_update(ip=ip, session=session)
+    result.update(row_update)
+    return JSONResponse(content=result)
+
+
+@app.get("/get-ips")
+async def get_ips(
+    session: SessionDep,
+    current_user: str = Depends(get_current_user)
+) -> list[schemas.FailedLoginInMem]:
+    return await crud.get_all_ips(session=session)
+
 
 @app.post("/visitor-analysis")
 async def visitor_analysis(
@@ -331,9 +345,10 @@ async def token(response: Response, email: EmailStr, session: SessionDep) -> Res
     return response
 
 
-'''# FOR /docs ONLY
-
+'''
+# THIS IS FOR SWAGGER TESTING ONLY
 # token: str = Depends(oauth2_scheme) <--- paste directly into endpoint you want to test
+
 @app.post("/token")
 async def token(
     session: SessionDep,

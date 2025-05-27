@@ -121,3 +121,13 @@
 
 ### Fixed:
 - The return object from Abuse IPDB is shaped like `{"data":{<data in here>}}`, thus all `.get()` calls to the object were returning `None`, as they were not structured correctly. Altered the return value in `ipabuse_check()` and all calls are working as expected, once again.
+
+## [Unreleased] - 2025.05.27
+### Added:
+- `/get-ips` and `/ban-ip` endpoints to allow a GET for populating frontend, and a user-controlled ip address ban feature.
+- Implemented `get_all_ips()` in `crud.py` to populate frontend.
+- `FailedLoginIPBan` pydantic model added for ip bans & reinstatements.
+- Built a modular `ip_status_update` to account for status updates implemented from the frontend, outside of the automation loop. `FailedLoginBan` is used here.
+
+### Changed:
+- Moved `ip_to_blacklist()` from `utils.py` to a new `ipset.py` to avoid a circular import trap. Function has also been renamed to `ipset_calls()` as it handles both blacklisting and whitelisting functionality.

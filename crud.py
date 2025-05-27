@@ -6,6 +6,7 @@ from datetime import datetime, timezone, tzinfo
 from time import sleep
 
 from fastapi import HTTPException, Request, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import EmailStr
 from sqlalchemy import update
@@ -15,6 +16,7 @@ from sqlmodel import select
 
 import schemas
 from database import async_session_maker
+from ipset import ipset_calls
 from services import ip_analysis_gathering, ipabuse_check
 
 logging.basicConfig(level=logging.INFO)
@@ -58,6 +60,23 @@ async def get_visitors(session: AsyncSession) -> list[schemas.VisitorInMem]:
             v.last_active, v.time_idle, v.is_active
         )
         for v in visitors
+    ]
+
+
+async def get_all_ips(session: AsyncSession) -> list[schemas.FailedLoginInMem]:
+    result = await session.execute(select(schemas.FailedLoginIntel))
+
+    return [
+        schemas.FailedLoginInMem(
+            ip=row.ip_address,
+            score=row.ipdb.get("abuseConfidenceScore", 0),
+            is_tor=row.ipdb.get("isTor", False),
+            total_reports=row.ipdb.get("totalReports", 0),
+            country=row.ipdb.get("countryCode", "XX"),
+            count=row.count
+        )
+        for row in result.scalars().all()
+        if row.ipdb is not None
     ]
 
 
@@ -204,11 +223,44 @@ async def upsert_failed_login_attempt(batch: list[list[str]]):
         logger.error(f' Session Failure: {e}')
 
 
+async def ip_status_update(ip: schemas.FailedLoginIPBan, session: AsyncSession):
+    try:
+        stmt = (
+            update(schemas.FailedLoginIntel)
+            .where(schemas.FailedLoginIntel.ip_address == ip.ip)
+            .values(
+                current_status=schemas.CurrentStatus[ip.status],
+                status_change_date=datetime.now(timezone.utc)
+            )
+        )
+        try:
+            await session.execute(stmt)
+            logger.info(
+                f' Status update \"{ip.status}\" for {ip.ip} executed successfully.')
+        except Exception as e:
+            logger.error(
+                f" Failed to execute status update for {ip.ip}: {e}"
+            )
+        await session.commit()
+        return {"status update": "successful"}
+    except Exception as e:
+        logger.error(f' Session Failure: {e}')
+
+
+# DRAGON [2025-05-27]: refactor to call ip_status_update.
+# Instead of performing its own `.where(...).values()` logic inline.
+# Revisit post-MVP deploy.
+
+
 async def ai_analysis_update(ip_updates: list[dict]):
     async with async_session_maker() as session:
         try:
             successful = 0
             for entry in ip_updates:
+                status = None
+                if entry["recommended_action"] == "autobanned":  # <--- autoban automation
+                    await run_in_threadpool(ipset_calls, ip=entry["ip_address"], action="blacklist")
+                    status = schemas.CurrentStatus.banned
                 stmt = (
                     update(schemas.FailedLoginIntel)
                     .where(schemas.FailedLoginIntel.ip_address == entry.get("ip_address"))
@@ -216,7 +268,8 @@ async def ai_analysis_update(ip_updates: list[dict]):
                         analysis=entry["analysis"],
                         risk=schemas.RiskLevel(entry["risk_level"]),
                         action=schemas.ActionType(entry["recommended_action"]),
-                        status_change_date=datetime.now(timezone.utc)
+                        status_change_date=datetime.now(timezone.utc),
+                        status=status if status else schemas.CurrentStatus.active
                     )
                 )
                 try:
@@ -226,10 +279,13 @@ async def ai_analysis_update(ip_updates: list[dict]):
                     )
                     successful += 1
                 except Exception as e:
-                    logger.error(f' Failed to execute update for {entry.get("ip_address")} {e}')
+                    logger.error(
+                        f' Failed to execute update for {entry.get("ip_address")} {e}')
             await session.commit()
+            # return {"successful_updates": successful}
         except Exception as e:
             logger.error(f' Session Failure: {e}')
+
 
 async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
     print("get_unanalyzed_ips triggered")
@@ -243,7 +299,7 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
                     (schemas.FailedLoginIntel.action == schemas.ActionType.none)
                 )
                 results = (await session.execute(stmt)).scalars().all()
-                
+
                 for_analysis = [
                     schemas.FailedLoginInMem(
                         ip=result.ip_address,
@@ -261,9 +317,10 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
                 analyzed_ips = await ip_analysis_gathering(ip_info=for_analysis)
                 await ai_analysis_update(ip_updates=analyzed_ips)
                 await asyncio.sleep(60)
-    
+
     except Exception as e:
         logger.error(f' 🤮 IP analysis loop crashed: {e}')
+
 
 async def shutdown_db_update(session: AsyncSession, visitor_list: list) -> bool:
     try:
@@ -284,3 +341,19 @@ async def shutdown_db_update(session: AsyncSession, visitor_list: list) -> bool:
     except Exception:
         logger.exception("Failed to update database on shutdown.")
         return False
+
+
+'''if __name__ == "__main__":
+    bannit = asyncio.run(
+        ai_analysis_update(
+            ip_updates=[
+                {
+                    "recommended_action": "autobanned",
+                    "risk_level": "black",
+                    "analysis": "he's just a bad dude!",
+                    "ip_address": "43.252.230.32"
+                }
+            ]
+        )
+    )
+    print(bannit)'''
