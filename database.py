@@ -1,14 +1,22 @@
+import logging
 import os
-from sqlalchemy_utils import database_exists, create_database
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+
+from dotenv import load_dotenv
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
+                                    create_async_engine)
+from sqlalchemy_utils import create_database, database_exists
 from sqlmodel import SQLModel
-import logging
+
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-abpwd = str(os.getenv('ABPWD', default=None))
+abpwd = os.getenv('ABPWD')
+if abpwd is None:
+    raise RuntimeError("ABPWD not found in environment variables")
 
 DATABASE_URL = f"postgresql+asyncpg://aberdeen:{abpwd}@localhost:5432/secdash"
 engine = create_async_engine(DATABASE_URL, echo=False)

@@ -32,65 +32,6 @@ class CurrentStatus(str, enum.Enum):
     suspended = "suspended"
     banned = "banned"
 
-# ----------- VISITOR-RELATED CLASSES ------------
-
-
-class Visitor(SQLModel, table=True):
-    __tablename__ = "visitors"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    username: str
-    acct_created: str
-    ip: str
-    port: str
-    device_info: str
-    browser_info: str
-    is_bot: bool
-    geo_info: str
-    ipdb: dict = Field(sa_column=Column(JSON))
-    last_active: Optional[str] = None
-    time_idle: int = 0  # measured in seconds
-    is_active: bool = False
-
-
-@dataclass(slots=True, order=False)
-class VisitorInMem():
-    visitor_id: int
-    username: str
-    acct_created: str
-    ip: str
-    port: str
-    device_info: str
-    browser_info: str
-    is_bot: bool
-    geo_info: str
-    ipdb: bool  # .getting "isTor" value only
-    last_active: str
-    time_idle: int
-    is_active: bool
-
-# -------------- VISITOR CASE-RELATED CLASSES ---------------
-# DRAGON [2025-05-19]: Use RiskLevel and *possibly* ActionType enums.
-# Constrain risk-level str to RiskLevel class. Replace `justificaton`
-# column with `analysis`, for consistency. Add `action` column to display
-# the action taken against the case.
-
-
-class VisitorsFlaggedSummary(SQLModel):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    visitor_id: Optional[int] = Field(default=None, foreign_key="visitors.id")
-    risk_level: str
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now().astimezone(),
-        sa_column=Column(DateTime(timezone=True))
-    )
-
-
-class VisitorsFlagged(VisitorsFlaggedSummary, table=True):
-    justification: str  # ai explanation
-    recommended_action: str  # ai suggestion
-    visitor_info: Optional[Visitor] = Relationship()
-
 # ------------ BOT LOGIN ATTEMPT-RELATED CLASSES ------------
 
 
@@ -136,6 +77,9 @@ class FailedLoginInMem:
     is_tor: bool  # IPDB isTor value
     total_reports: int  # IPDB report tally
     count: int  # total attempts on this server at time of analysis
+    risk: str | None = None
+    status: str | None = None
+    reco_action: str | None = None
     country: str | None = None
     first_seen: str | None = None  # first attempt against server
     last_seen: str | None = None  # last attempt against server
@@ -168,13 +112,12 @@ class IOStatLine(SQLModel, table=True):
 class IoStatLineInMem:
     date: str
     time: str
-    kbt: float
-    tps: int
-    throughput_mbs: float
-    cpu_user_pct: float
-    cpu_system_pct: float
-    cpu_idle_pct: float
-    load_avg_1m: float
+    user: float
+    nice: float
+    system: float
+    iowait: float
+    steal: float
+    idle: float
 
 # ----------- USER-RELATED CLASSES ------------
 

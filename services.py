@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel
 
-from schemas import FailedLoginInMem, VisitorInMem
+from schemas import FailedLoginInMem
 
 load_dotenv()
 
@@ -18,7 +18,7 @@ openai_key = os.getenv("OPENKEY001")
 client = OpenAI(api_key=openai_key)
 
 
-async def analyze_visitor(visitor: VisitorInMem):
+'''async def analyze_visitor(visitor: VisitorInMem):
     prompt = f"""
     You are an AI security analyst. Evaluate the following visitor activity and return a JSON object with:
     - "risk_level" (low, medium, or high)
@@ -49,7 +49,7 @@ async def analyze_visitor(visitor: VisitorInMem):
         result = response.choices[0].message.content.strip()
         return json.loads(result)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))'''
 
 
 async def analyze_ip_address(ip: FailedLoginInMem) -> dict:

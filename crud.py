@@ -1,17 +1,12 @@
 import asyncio
 import logging
-import os
 from collections import defaultdict
-from datetime import datetime, timezone, tzinfo
-from time import sleep
+from datetime import datetime, timezone
 
-from fastapi import HTTPException, Request, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
 from pydantic import EmailStr
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
 import schemas
@@ -21,14 +16,6 @@ from services import ip_analysis_gathering, ipabuse_check
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-async def visitor_info_post(session: AsyncSession, item: schemas.Visitor):
-    session.add(item)
-    await session.commit()
-    await session.refresh(item)
-    logger.info(f' Visitor information documented successfully.')
-    return item
 
 
 async def get_user_by_email(session: AsyncSession, email: EmailStr) -> schemas.UserInDb:
@@ -48,21 +35,6 @@ async def register_user(session: AsyncSession, user: schemas.UserReg) -> schemas
     return user
 
 
-async def get_visitors(session: AsyncSession) -> list[schemas.VisitorInMem]:
-    result = await session.execute(select(schemas.Visitor))
-    visitors = result.scalars().all()
-
-    return [
-        schemas.VisitorInMem(
-            v.id, v.username, v.acct_created, v.ip, v.port, v.device_info,
-            v.browser_info, v.is_bot, v.geo_info,
-            v.ipdb.get("isTor", False),  # lean structure
-            v.last_active, v.time_idle, v.is_active
-        )
-        for v in visitors
-    ]
-
-
 async def get_all_ips(session: AsyncSession) -> list[schemas.FailedLoginInMem]:
     result = await session.execute(select(schemas.FailedLoginIntel))
 
@@ -73,76 +45,14 @@ async def get_all_ips(session: AsyncSession) -> list[schemas.FailedLoginInMem]:
             is_tor=row.ipdb.get("isTor", False),
             total_reports=row.ipdb.get("totalReports", 0),
             country=row.ipdb.get("countryCode", "XX"),
-            count=row.count
+            reco_action=row.action,
+            count=row.count,
+            risk=row.risk,
+            status=row.status
         )
         for row in result.scalars().all()
         if row.ipdb is not None
     ]
-
-
-async def get_flagged_visitors(session: AsyncSession) -> list[schemas.VisitorsFlaggedSummary]:
-    result = await session.execute(select(schemas.VisitorsFlagged))
-    flagged_visitors = result.scalars().all()
-
-    return [
-        schemas.VisitorsFlaggedSummary(
-            id=v.id,
-            visitor_id=v.visitor_id,
-            risk_level=v.risk_level,
-            created_at=v.created_at
-        )
-        for v in flagged_visitors
-    ]
-
-
-async def get_flagged_visitor(session: AsyncSession, case_id: int) -> schemas.VisitorsFlagged:
-    result = await session.execute(select(schemas.VisitorsFlagged).options(selectinload(schemas.VisitorsFlagged.visitor_info)).where(schemas.VisitorsFlagged.id == case_id))
-    flagged_visitor = result.scalars().one_or_none()
-
-    visitor = flagged_visitor.visitor_info
-
-    return {
-        "id": flagged_visitor.id,
-        "visitor_id": flagged_visitor.visitor_id,
-        "risk_level": flagged_visitor.risk_level,
-        "justification": flagged_visitor.justification,
-        "recommended_action": flagged_visitor.recommended_action,
-        "created_at": flagged_visitor.created_at.isoformat(),
-        "visitor_info": {
-            "username": visitor.username,
-            "acct_created": visitor.acct_created,
-            "ip": visitor.ip,
-            "port": visitor.port,
-            "device_info": visitor.device_info,
-            "browser_info": visitor.browser_info,
-            "is_bot": visitor.is_bot,
-            "geo_info": visitor.geo_info,
-            "ipdb": visitor.ipdb,
-            "last_active": visitor.last_active,
-            "time_idle": visitor.time_idle,
-            "is_active": visitor.is_active
-        } if visitor else None
-    }
-
-# DRAGON [2025-05-19]: schemas.RiskLevel and schemas.ActionType functionality
-# Default risk value for schemas.VisitorsFlagged.risk_level should be set to
-# schemas.RiskLevel.flagged.
-
-
-async def visitor_flag_post(session: AsyncSession, item: schemas.VisitorsFlagged) -> JSONResponse:
-    session.add(item)
-    await session.commit()
-    await session.refresh(item)
-    logger.info(
-        f' Account {item.visitor_id} flagged successfully. Case created.')
-    return JSONResponse(
-        status_code=201,
-        content={
-            "message": f"Visitor {item.visitor_id} flagged successfully.",
-            "case_id": item.id,
-            "created_at": item.created_at.isoformat()
-        }
-    )
 
 
 # DRAGON [2025-05-24]: function refactor for only one commit
@@ -229,7 +139,7 @@ async def ip_status_update(ip: schemas.FailedLoginIPBan, session: AsyncSession):
             update(schemas.FailedLoginIntel)
             .where(schemas.FailedLoginIntel.ip_address == ip.ip)
             .values(
-                current_status=schemas.CurrentStatus[ip.status],
+                status=schemas.CurrentStatus[ip.status],
                 status_change_date=datetime.now(timezone.utc)
             )
         )
@@ -242,7 +152,7 @@ async def ip_status_update(ip: schemas.FailedLoginIPBan, session: AsyncSession):
                 f" Failed to execute status update for {ip.ip}: {e}"
             )
         await session.commit()
-        return {"status update": "successful"}
+        return {"db_update": "successful"}
     except Exception as e:
         logger.error(f' Session Failure: {e}')
 
@@ -288,7 +198,6 @@ async def ai_analysis_update(ip_updates: list[dict]):
 
 
 async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
-    print("get_unanalyzed_ips triggered")
     try:
         logger.info(f' SSH monitoring started')
         while True:
@@ -320,27 +229,6 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
 
     except Exception as e:
         logger.error(f' 🤮 IP analysis loop crashed: {e}')
-
-
-async def shutdown_db_update(session: AsyncSession, visitor_list: list) -> bool:
-    try:
-        for visitor in visitor_list:
-            stmt = (
-                update(schemas.Visitor)
-                .where(schemas.Visitor.username == visitor.username)
-                .values(
-                    is_active=visitor.is_active,
-                    last_active=visitor.last_active,
-                    time_idle=visitor.time_idle
-                )
-            )
-            await session.execute(stmt)
-
-        await session.commit()
-        return True
-    except Exception:
-        logger.exception("Failed to update database on shutdown.")
-        return False
 
 
 '''if __name__ == "__main__":

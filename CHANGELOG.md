@@ -131,3 +131,30 @@
 
 ### Changed:
 - Moved `ip_to_blacklist()` from `utils.py` to a new `ipset.py` to avoid a circular import trap. Function has also been renamed to `ipset_calls()` as it handles both blacklisting and whitelisting functionality.
+
+## [version 1.0.0] - 2025-05.31
+### Added:
+- Mounted a `styles` folder and created `dashboard.css` inside.
+- Created a `countryMapping.js` to contain references of country codes and their respective country names.
+- Connected `/ip-stream` event to frontend via `fetchIPS.js`.
+- Connected `/ipset-calling` POST to frontend via `iPSetCall.js`.
+- Mapped country codes, country names, and ssh attempt counts to world map using `mapEChart.js` module.
+- Created `mapModal.js` module to populate a modal with relevant ip data when a country is clicked on the map.
+
+
+### Changed:
+- All `.sh` in /scripts revised to include a prod-environment-native version. Local version commented out.
+- `ABPWD` env var now loaded via dotenv.
+- `ipset_calls` now with prod-environment-native cmd variable. Logging statements changed to reflect correct wording.
+- Removed several unnecessary pip packages used for faking user data. Update reflected in `requirements.txt`.
+- Removed or disabled all user data implementation. Too heavy, and not very useful. Will reapproach when there are actual site data to tie into.
+- Revised `FailedLoginInMem` schema to also include a recommended action value, `reco_action`.
+- Restructured `new_snapshot` in `ip_stream_delivery` to serialize by default using `[asdict(ip) for ip in ips]`, to assist with frontend data refresh.
+- Included an auto-refresh at `/ipset-calling` to force an update to `ips` deque object, in order to reflect an immediate frontend data update after a ban or restore takes place on an ip address.
+- Altered querySelector for `const tableBody` in `fetchConnectionsdata.js`.
+- Removed now-unusable chart objects from `ioChart.js`. Changes also reflected in `iostatStreamHandler.js`.
+- Removed `visitors` tab from `uiHandlers.js`, and replaced it with an `ip-panel-section` tab instead.
+- Switched all frontend Japanese over to English.
+
+### Fixed:
+- In `ip_status_update`, changed incorrect `current_status` column name to correct `status` naming convention, to match FailedLoginIntel schema.

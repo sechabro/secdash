@@ -1,13 +1,12 @@
 import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated
 
 import jwt
-from fastapi import (Cookie, Depends, FastAPI, Form, HTTPException, Query,
-                     Request, Response, status)
+from fastapi import (Cookie, Depends, FastAPI, Form, HTTPException, Request,
+                     Response, status)
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
                                StreamingResponse)
@@ -20,14 +19,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import crud
 import schemas
-from database import (async_session_maker, create_tables, database_check,
-                      get_session, temp_sync_engine)
+from database import create_tables, database_check, get_session
 from ipset import ipset_calls
-from services import analyze_visitor
 from utils import (established_connections, host_info_async, io_stream,
-                   iostats, password_hasher, password_verify, persist_visitors,
-                   ps_stream, running_ps, ssh_stream, stream_delivery,
-                   visitor_activity_gen, visitor_stream, visitors)
+                   iostats, ip_stream_delivery, ip_stream_manager, ips,
+                   ips_lock, password_hasher, password_verify, ps_stream,
+                   running_ps, ssh_stream, stream_delivery)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,6 +33,7 @@ templates = Jinja2Templates(directory="templates")
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 app = FastAPI()
 app.mount("/js", StaticFiles(directory="js"), name="js")
+app.mount("/styles", StaticFiles(directory="styles"), name="styles")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 
@@ -87,10 +85,10 @@ async def on_startup():
     app.state.ips_task = asyncio.create_task(
         crud.get_unanalyzed_ips()
     )
+    app.state.ips_stream_task = asyncio.create_task(
+        ip_stream_manager()
+    )
     logger.info(f' System metrics streaming started...')
-    app.state.visitor_task = asyncio.create_task(
-        visitor_activity_gen())
-    logger.info(f' Simulating user activity.')
 
 
 @app.on_event("shutdown")
@@ -99,11 +97,8 @@ async def shutdown_async():
     app.state.ps_task.cancel()
     app.state.ssh_task.cancel()
     app.state.ips_task.cancel()
+    app.state.ips_stream_task.cancel()
     logger.info(f' System metrics streams stopped...')
-    data_persist = await persist_visitors()
-    if not data_persist:
-        logger.info(f' DB update failed. Shutting down sadly...')
-    app.state.visitor_task.cancel()
 
 
 @app.get("/", response_class=HTMLResponse, response_model=None)
@@ -208,82 +203,29 @@ async def host_status(current_user: str = Depends(get_current_user)) -> dict:
     return await host_info_async()
 
 
-@app.post("/ban-ip")
+@app.post("/ipset-calling")
 async def ban_ip(
     session: SessionDep,
     ip: schemas.FailedLoginIPBan,
     current_user: str = Depends(get_current_user)
 ) -> JSONResponse:
-    result = await run_in_threadpool(ipset_calls, ip=ip.ip)
+    result = await run_in_threadpool(ipset_calls, ip=ip.ip, action=ip.status)
     row_update = await crud.ip_status_update(ip=ip, session=session)
     result.update(row_update)
+    with ips_lock:
+        for ip_obj in ips:
+            if ip_obj.ip == ip.ip:
+                ip_obj.status = ip.status
     return JSONResponse(content=result)
 
 
-@app.get("/get-ips")
+@app.get("/ip-stream")
 async def get_ips(
     session: SessionDep,
     current_user: str = Depends(get_current_user)
 ) -> list[schemas.FailedLoginInMem]:
-    return await crud.get_all_ips(session=session)
-
-
-@app.post("/visitor-analysis")
-async def visitor_analysis(
-    visitor: schemas.VisitorInMem,
-    current_user: str = Depends(get_current_user)
-) -> JSONResponse:
-    return await analyze_visitor(visitor=visitor)
-
-
-@app.post("/visitor-flag")
-async def visitor_flag(
-    visitor: schemas.VisitorsFlagged,
-    session: SessionDep,
-    current_user: str = Depends(get_current_user)
-) -> JSONResponse:
-    return await crud.visitor_flag_post(session=session, item=visitor)
-
-
-@app.get("/flagged-visitors")
-async def flagged_visitors(
-    request: Request,
-    session: SessionDep,
-    current_user: str = Depends(get_current_user)
-) -> list[schemas.VisitorsFlaggedSummary]:
-    return await crud.get_flagged_visitors(session=session)
-
-
-@app.get("/flagged-visitors/{case_id}")
-async def flagged_visitors(
-    case_id: int,
-    request: Request,
-    session: SessionDep,
-    current_user: str = Depends(get_current_user)
-) -> dict:
-    return await crud.get_flagged_visitor(session=session, case_id=case_id)
-
-
-@app.get("/visitors")
-async def visitor(
-    request: Request,
-    session: SessionDep,
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=9, ge=1, le=100),
-    filter_field: str = Query(default="is_active"),
-    filter_param: str = Query(default="true"),
-
-    current_user: str = Depends(get_current_user)
-):
     return StreamingResponse(
-        stream_delivery(
-            data_stream=visitors,
-            sort=True,
-            key="username",
-            filter_field=filter_field,
-            filter_param=filter_param,
-            page=page,
-            limit=limit
+        ip_stream_delivery(
         ),
         media_type="text/event-stream"
     )

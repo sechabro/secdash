@@ -1,4 +1,4 @@
-import { fetchCaseLoad } from "./fetchCaseLoad.js";
+import { mapChart } from './mapEChart.js';
 
 export function initializeUIHandlers() {
     // TAB SWITCHING HANDLER
@@ -12,6 +12,8 @@ export function initializeUIHandlers() {
             window.fetchHostStatus();
         } else if (tabId === 'connections') {
             window.runWhenReady(() => window.fetchConnectionsData());
+        } else if (tabId === 'ip-panel-section' && mapChart) {
+            mapChart.resize();
         }
     }
     window.showTab = showTab;  // Expose globally for your <div onclick="showTab('...')">
@@ -28,27 +30,28 @@ export function initializeUIHandlers() {
     // SSE STREAMS AND START TRIGGERS
     window.runWhenReady(() => window.startIostatStream());
     window.runWhenReady(() => window.startProcessStream());
-    window.runWhenReady(() => window.startVisitorStream());
+    ///window.runWhenReady(() => window.startVisitorStream());
+    window.runWhenReady(() => window.startIPDataStream())
     // show visitors tab by default:
-    showTab('visitors');
+    showTab('ip-panel-section');
 }
 
-export async function casesViewSwitch() {
-    document.getElementById("nav-cases").addEventListener("click", async (e) => {
-        e.preventDefault();
+//export async function casesViewSwitch() {
+//    document.getElementById("nav-cases").addEventListener("click", async (e) => {
+//        e.preventDefault();
+//
+//        document.getElementById("main-content").classList.add("hidden");
+//        document.getElementById("cases-view").classList.remove("hidden");
+//
+//        await fetchCaseLoad(); //<-- this is async btw.
+//    });
+//}
 
-        document.getElementById("main-content").classList.add("hidden");
-        document.getElementById("cases-view").classList.remove("hidden");
-
-        await fetchCaseLoad(); //<-- this is async btw.
-    });
-}
-
-export function liveDashboardSwitch() {
-    document.getElementById("live-dashboard").addEventListener("click", (e) => {
-        e.preventDefault();
-
-        document.getElementById("cases-view").classList.add("hidden");
-        document.getElementById("main-content").classList.remove("hidden");
-    });
-}
+//export function liveDashboardSwitch() {
+//    document.getElementById("live-dashboard").addEventListener("click", (e) => {
+//        e.preventDefault();
+//
+//        document.getElementById("cases-view").classList.add("hidden");
+//        document.getElementById("main-content").classList.remove("hidden");
+//    });
+//}
