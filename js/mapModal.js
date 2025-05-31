@@ -1,6 +1,6 @@
 import { allIpData } from "./fetchIPS.js";
 import { iPSetCall } from "./iPSetCall.js";
-import { nameToCode } from "./mapEChart.js";
+import { getMapChart, nameToCode } from "./mapEChart.js";
 
 export function showCountryModal(countryName, ipData) {
     const overlay = document.getElementById("country-modal-overlay");
@@ -85,5 +85,12 @@ export function showCountryModal(countryName, ipData) {
     closeBtn.onclick = () => overlay.classList.add("hidden");
     window.onclick = (e) => { if (e.target === overlay) overlay.classList.add("hidden"); };
 
-    setTimeout(() => { if (mapChart) { mapChart.resize(); } }, 100);
+    setTimeout(() => {
+        const mapChart = getMapChart();
+        if (mapChart) {
+            mapChart.resize();
+        } else {
+            console.warn("mapChart still not initialized.");
+        }
+    }, 100);
 };
