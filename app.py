@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import jwt
+from dotenv import load_dotenv
 from fastapi import (Cookie, Depends, FastAPI, Form, HTTPException, Request,
                      Response, status)
 from fastapi.concurrency import run_in_threadpool
@@ -25,6 +26,8 @@ from utils import (established_connections, host_info_async, io_stream,
                    iostats, ip_stream_delivery, ip_stream_manager, ips,
                    ips_lock, password_hasher, password_verify, ps_stream,
                    running_ps, ssh_stream, stream_delivery)
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
