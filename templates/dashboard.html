@@ -5,659 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Visitor Dashboard</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            padding: 20px;
-            overflow-x: hidden;
-            scroll-behavior: smooth;
-        }
-
-        .tabs {
-            display: flex;
-            margin-bottom: 10px;
-        }
-
-        .tab {
-            margin-right: 10px;
-            padding: 10px 20px;
-            cursor: pointer;
-            background-color: #eee;
-            border-radius: 5px;
-        }
-
-        .tab.active {
-            background-color: #ccc;
-        }
-
-        .content {
-            display: none;
-        }
-
-        .content.active {
-            display: block;
-        }
-
-        table.connections-table {
-            width: 100%;
-            background-color: #1f2937;
-            color: white;
-            border-radius: 12px;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
-            padding: 20px;
-            border-collapse: collapse;
-            transition: box-shadow 0.3s ease;
-            position: relative;
-
-            /* Subtle light gradient for 3D effect */
-            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
-            background-blend-mode: hard-light;
-            margin: 0 auto;
-        }
-
-        table.connections-table th,
-        table.connections-table td {
-            padding: 10px 12px;
-            text-align: left;
-            border: none;
-            /* Remove all grid lines */
-        }
-
-        table.connections-table th {
-            background-color: #00adee;
-            color: #1f2937;
-            font-weight: bold;
-            font-size: 0.95rem;
-        }
-
-        table.case-listout thead th:first-child {
-            border-top-left-radius: 12px !important;
-        }
-
-        table.case-listout thead th:last-child {
-            border-top-right-radius: 12px !important;
-        }
-
-        .collapsible {
-            cursor: pointer;
-            margin-top: 10px;
-            background-color: #f9f9f9;
-            border: none;
-            padding: 10px;
-            width: 100%;
-            text-align: left;
-        }
-
-        .collapsible-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.4s ease, padding 0.4s ease;
-            padding: 0 1rem;
-            background-color: #f0f0f0;
-            margin-top: 5px;
-        }
-
-        .collapsible-content.visible {
-            max-height: 500px;
-            padding: 10px 1rem;
-        }
-
-        .sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            height: 100%;
-            background-color: #1f2937;
-            color: white;
-            overflow-x: hidden;
-            transition: width 0.3s ease;
-            z-index: 1000;
-            padding-top: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .sidebar.closed {
-            width: 60px;
-        }
-
-        .sidebar.open {
-            width: 200px;
-        }
-
-        .sidebar-header {
-            width: 100%;
-            text-align: left;
-            padding-left: 16px;
-            font-size: 24px;
-            cursor: pointer;
-        }
-
-        .sidebar-content {
-            width: 100%;
-            display: none;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-
-        .sidebar.open .sidebar-content {
-            display: block;
-        }
-
-        .sidebar-content a {
-            color: white;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 18px;
-            display: block;
-            margin-bottom: 7px;
-        }
-
-        .sidebar-content a:hover {
-            text-decoration: underline;
-        }
-
-        .sidebar-content a:last-of-type {
-            margin-bottom: 2px;
-        }
-
-        .sidebar button {
-            background-color: #00adee;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            cursor: pointer;
-            border-radius: 4px;
-            margin-top: 10px;
-            align-self: flex-start;
-        }
-
-        .main-content {
-            margin-left: 60px;
-            width: calc(100% - 60px);
-            transition: margin-left 0.3s ease, width 0.3s ease;
-            box-sizing: border-box;
-        }
-
-        .sidebar.open~.main-content {
-            margin-left: 200px;
-            width: calc(100% - 200px);
-        }
-
-        #iostat-canvas-container {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            width: 100%;
-            box-sizing: border-box;
-            padding: 1rem;
-        }
-
-        #iostat-canvas-container canvas {
-            flex: 1 1 0;
-            max-width: 48%;
-            width: 100% !important;
-            height: auto !important;
-            display: block;
-            margin: 0 0.5rem;
-            aspect-ratio: 16 / 9;
-        }
-
-        #host-status {
-            margin-top: 1rem;
-        }
-
-        .host-strip {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-            background-color: #1f2937;
-            padding: 1rem;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.95rem;
-            color: #00adee;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            justify-content: center;
-        }
-
-        .host-strip>div {
-            background: #fff;
-            padding: 0.5rem 0.75rem;
-            border-radius: 4px;
-            box-shadow: inset 0 0 0 1px #e5e7eb;
-            min-width: 120px;
-            text-align: center;
-            align-self: center;
-        }
-
-        .user-card {
-            background-color: #1f2937;
-            color: white;
-            border-radius: 12px;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
-            padding: 20px;
-            margin-bottom: 24px;
-            transition: box-shadow 0.3s ease;
-            position: relative;
-
-            /* Subtle light gradient for 3D effect */
-            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
-            background-blend-mode: hard-light;
-        }
-
-        .user-card:hover {
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
-        }
-
-        .user-card table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-
-        .user-card table>thead>tr>th {
-            background-color: #00adee !important;
-            color: white !important;
-        }
-
-        .user-card th,
-        .user-card td {
-            padding: 6px;
-            border: none;
-        }
-
-        .user-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding-bottom: 8px;
-            margin-bottom: 16px;
-        }
-
-        .user-header h3 {
-            font-size: 1.25rem;
-            margin: 0;
-        }
-
-        .user-header p {
-            font-size: 0.95rem;
-            color: #d1d5db;
-            margin: 0;
-        }
-
-        .table-container {
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            /* visible border that hugs the radius */
-            margin-top: 12px;
-
-        }
-
-        .analyze-btn {
-            background-color: #00adee;
-            color: white;
-            padding: 6px 12px;
-            font-weight: bold;
-            border: none;
-            cursor: pointer;
-            width: 100%;
-            transition: background-color 0.3s ease;
-        }
-
-        .analyze-btn:hover {
-            background-color: #0086b3;
-        }
-
-        .visitor-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-        }
-
-        .visitor-query {
-            position: sticky;
-            top: 0;
-            /* placing it above all the other stuff */
-            z-index: 1000;
-            background-color: #00adee;
-            color: white;
-            padding: 1rem;
-            border-radius: 12px;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
-            margin-bottom: 24px;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
-            background-blend-mode: hard-light;
-        }
-
-        .visitor-query label {
-            font-weight: bold;
-        }
-
-        .visitor-query select {
-            background-color: #1f2937;
-            color: white;
-            border: 1px solid #00adee;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 0.95rem;
-        }
-
-        .pagination-controls {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-left: auto;
-        }
-
-        .pagination-controls button {
-            background-color: #1f2937;
-            color: white;
-            border: 1px solid transparent;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 0.95rem;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-
-        .pagination-controls button:hover:not(:disabled) {
-            border: 1px solid white;
-        }
-
-        .pagination-controls button:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .case-modal {
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            opacity: 0;
-            pointer-events: none;
-            position: fixed;
-            z-index: 9999;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            transition: opacity 0.4s ease;
-            /*overflow-y: auto;*/
-        }
-
-        .case-modal:not(.hidden) {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .case-modal-content {
-            transform: scale(0.97);
-            background-color: #1f2937;
-            color: #fff;
-            padding: 24px;
-            border-radius: 12px;
-            width: 93%;
-            max-width: 1600px;
-            margin: 2rem auto;
-            max-height: calc(100vh - 7rem);
-            overflow-y: auto;
-            box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
-            opacity: 0;
-            transition: opacity 0.4s ease;
-
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 2rem;
-        }
-
-        .case-modal-content.visible {
-            transform: scale(1);
-            opacity: 1;
-        }
-
-        .case-modal-content::-webkit-scrollbar {
-            width: 10px;
-        }
-
-        .case-modal-content::-webkit-scrollbar-track {
-            background: #1f2937;
-            border-top-right-radius: 12px;
-            border-bottom-right-radius: 12px;
-        }
-
-        .case-modal-content::-webkit-scrollbar-thumb {
-            background-color: #444;
-            border-radius: 12px;
-            border: 2px solid #1f2937;
-            /* Inner padding effect */
-        }
-
-        .case-modal-content::-webkit-scrollbar-thumb:hover {
-            background-color: #666;
-        }
-
-        .modal {
-            display: block;
-            opacity: 0;
-            pointer-events: none;
-            position: fixed;
-            z-index: 9999;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            transition: opacity 0.4s ease;
-        }
-
-        .modal:not(.hidden) {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .modal-content {
-            background-color: #1f2937;
-            color: #fff;
-            padding: 24px;
-            border-radius: 12px;
-            width: 80%;
-            max-width: 600px;
-            margin: 15% auto;
-            box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
-            opacity: 0;
-            transition: opacity 0.4s ease;
-        }
-
-        .modal-content.visible {
-            opacity: 1;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .close-button {
-            float: right;
-            font-size: 24px;
-            cursor: pointer;
-        }
-
-        .case-button {
-            margin-top: 16px;
-            padding: 8px 16px;
-            background-color: #00adee;
-            border: none;
-            color: white;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        .spinner {
-            position: fixed;
-            z-index: 10000;
-            top: 50%;
-            left: 50%;
-            width: 48px;
-            height: 48px;
-            margin: -24px 0 0 -24px;
-            border: 6px solid #ccc;
-            border-top-color: #00adee;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .case-listout {
-            width: 100%;
-            table-layout: fixed;
-        }
-
-        .case-listout td,
-        .case-listout th {
-            padding: 10px 12px;
-            text-align: left;
-            word-wrap: break-word;
-        }
-
-        table.case-listout {
-            width: 100%;
-            background-color: #1f2937;
-            color: white;
-            border-radius: 12px;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
-            padding: 20px;
-            border-collapse: collapse;
-            transition: box-shadow 0.3s ease;
-            margin: 0 auto;
-            background-image: linear-gradient(180deg, rgba(221, 221, 221, 0.4), transparent 3rem);
-            background-blend-mode: hard-light;
-            table-layout: fixed;
-        }
-
-        table.case-listout th,
-        table.case-listout td {
-            padding: 12px;
-            text-align: center;
-            border: none;
-            font-size: 0.95rem;
-            vertical-align: middle;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        table.case-listout th {
-            background-color: #00adee;
-            color: #1f2937;
-            font-weight: bold;
-        }
-
-        table.case-listout tbody tr:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-            cursor: pointer;
-        }
-
-        .case-listout td:first-child,
-        .case-listout th:first-child {
-            width: 10%;
-        }
-
-        .case-listout td:nth-child(2),
-        .case-listout th:nth-child(2) {
-            width: 15%;
-        }
-
-        .case-listout td:nth-child(3),
-        .case-listout th:nth-child(3) {
-            width: 20%;
-        }
-
-        .case-listout td:last-child,
-        .case-listout th:last-child {
-            width: 55%;
-        }
-
-
-        .case-link {
-            color: #00adee;
-            text-decoration: underline;
-            cursor: pointer;
-        }
-
-        .case-link:hover {
-            text-decoration: none;
-        }
-
-        .visitor-info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin: 1rem 0;
-            background-color: #2a2e38;
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 0 6px rgba(0, 0, 0, 0.3);
-        }
-
-        .visitor-info-grid div {
-            background: #1f2937;
-            padding: 0.75rem;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            color: #eee;
-            border-left: 4px solid #00adee;
-        }
-
-        .ipdb-block summary {
-            cursor: pointer;
-            font-size: 1rem;
-            color: #00adee;
-            margin-top: 1rem;
-        }
-
-        .ipdb-block pre {
-            background: #1f2937;
-            color: #00ffae;
-            padding: 1rem;
-            border-radius: 6px;
-            white-space: pre-wrap;
-            word-break: break-word;
-            max-height: 300px;
-            /*overflow-y: auto;*/
-            font-size: 0.85rem;
-        }
-
-        .suspend-acct-button {
-            background-color: #00adee;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            font-weight: bold;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-top: 1rem;
-            transition: background-color 0.3s ease;
-        }
-
-        .suspend-acct-button:hover {
-            background-color: #0086b3;
-        }
-    </style>
+    <link rel="stylesheet" href="/styles/dashboard.css">
 </head>
 
 <body>
@@ -668,89 +16,56 @@
         </div>
         <div class="sidebar-content">
             <p>Hi, {{ user }}</p>
-            <a href="#" id="live-dashboard">Live Dashboard</a>
-            <a href="#" id="nav-cases">Cases</a>
+            <!--<a href="#" id="live-dashboard">Live Dashboard</a>
+            <a href="#" id="nav-cases">Cases</a>-->
             <form action="/logout" method="get">
                 <button type="submit">Logout</button>
             </form>
         </div>
     </div>
     <!-- CASE LOAD VIEW -->
-    <div id="cases-view" class="main-content hidden">
-        <h2>Flagged Visitors / Cases</h2>
-        <table class="case-listout">
-            <tbody></tbody>
-        </table>
-        <div id="case-modal" class="case-modal hidden">
-            <div class="case-modal-content">
-                <div id="wait-spinner-case" class="spinner hidden"></div>
-                <span id="modal-close" class="close-button">&times;</span>
-                <h2>Case Details</h2>
-                <p><strong>ID:</strong> <span id="case-id-no-span"></span></p>
-                <p><strong>Date Created:</strong> <span id="created-at-span"></span></p>
-                <p><strong>Risk Level</strong> <span id="risk-level-span"></span></p>
-                <p><strong>Recommended Action</strong> <span id="reco-action-span"></span></p>
-                <p><strong>Justification:</strong> <span id="justification-span"></span></p>
 
-                <!-- Visitor Info Grid -->
-                <div class="visitor-info-grid">
-                    <div><strong>User ID:</strong> <span id="user-id-span"></span></div>
-                    <div><strong>Username:</strong> <span id="username-span"></span></div>
-                    <div><strong>Account Created:</strong> <span id="acct-created-span"></span></div>
-                    <div><strong>IP Address:</strong> <span id="ip-span"></span></div>
-                    <div><strong>Device Info:</strong> <span id="device-info-span"></span></div>
-                    <div><strong>Browser Info:</strong> <span id="browser-info-span"></span></div>
-                    <div><strong>Bot Status:</strong> <span id="is-bot-span"></span></div>
-                    <div><strong>Geo Info:</strong> <span id="geo-info-span"></span></div>
-                    <div><strong>Last Active:</strong> <span id="last-active-span"></span></div>
-                    <div><strong>Idle Time:</strong> <span id="time-idle-span"></span></div>
-                    <div><strong>Active Now:</strong> <span id="is-active-span"></span></div>
-                </div>
-                <!-- Expandable IPDB Block -->
-                <details class="ipdb-block">
-                    <summary><strong>AbuseIPDB Info</strong></summary>
-                    <pre id="ipdb-json"></pre>
-                </details>
-                <button id="suspend-acct-button" class="suspend-acct-button"></button>
-            </div>
-        </div>
-    </div>
     <!-- LIVE DASHBOARD VIEW -->
     <div id="main-content" class="main-content">
         <div class="tabs">
-            <div class="tab active" onclick="showTab('visitors')">閲覧者情報</div>
-            <div class="tab" onclick="showTab('connections')">外部接続</div>
-            <div class="tab" onclick="showTab('host')">ホスト状況</div>
-            <div class="tab" onclick="showTab('processes')">サーバ側の処理</div>
+            <div class="tab active" onclick="showTab('ip-panel-section')">IP Info WorldMap</div>
+            <!--<div class="tab" onclick="showTab('visitors')">閲覧者情報</div>-->
+            <div class="tab" onclick="showTab('connections')">Server IO Connections</div>
+            <div class="tab" onclick="showTab('host')">Host Status</div>
+            <div class="tab" onclick="showTab('processes')">Server-side Processes</div>
         </div>
-
-        <div id="visitors" class="content">
-            <h2>サイト訪問者ビューアー (リアルタイム)</h2>
-            <div class="visitor-query">
-                <label for="filter-field">Filter By:</label>
-                <select id="filter-field">
-                    <option value="is_active">Active Status</option>
-                    <option value="is_bot">Bot Status</option>
-                    <option value="ipdb">Tor Usage</option>
-                </select>
-
-                <label for="filter-param">Value:</label>
-                <select id="filter-param">
-                    <option value="true">True</option>
-                    <option value="false">False</option>
-                </select>
-
-                <div id="pagination-controls" class="pagination-controls">
-                    <button id="prev-page">Previous</button>
-                    <span id="page-number">Page 1</span>
-                    <button id="next-page">Next</button>
+        <div id="ip-panel-section" class="content">
+            <div id="ip-map" style="width: 100%; height: 700px; margin-bottom: 2rem;"></div>
+            <div id="ip-dropdown-container"></div>
+        </div>
+        <div id="country-modal-overlay" class="country-modal-overlay hidden">
+            <div class="country-modal-content" id="country-modal-content"> <!-- Add this ID -->
+                <h2 id="country-modal-title" class="country-modal-title">Country Name</h2>
+                <button id="country-modal-close-btn" class="country-modal-close">&times;</button>
+                <div class="table-scroll-wrapper">
+                    <table class="connections-table">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>Abuse IPDB Score</th>
+                                <th>Tor Usage</th>
+                                <th>Total Reports</th>
+                                <th>Server Attempts</th>
+                                <th>Risk Level</th>
+                                <th>Current Status</th>
+                                <th>Recommended Action</th>
+                                <th>Available Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
+                <!--<button id="country-modal-close-btn" class="country-modal-close">Close</button>-->
             </div>
-            <div id="visitor-container" class="visitor-grid"></div>
         </div>
 
         <div id="connections" class="content">
-            <h2>サイトの外接続</h2>
+            <h2>Current IO Connections</h2>
             <table class="connections-table">
                 <thead>
                     <tr>
@@ -770,23 +85,20 @@
         </div>
 
         <div id="host" class="content">
-            <h2>システムパフォーマンス指標</h2>
+            <h2>System Performance Index</h2>
             <pre id="host-status"></pre>
-            <h2>サーバ入出力のリアルタイムデーター (1秒ごと)</h2>
-            <div id="iostat-canvas-container">
-                <canvas id="ioChart"></canvas>
+            <h2>Host CPU Performance Metrics (1 Sec)</h2>
+            <div id="iostat-canvas-container" class="chart-container">
                 <canvas id="cpuChart"></canvas>
-                <canvas id="diskOpsChart"></canvas>
-                <canvas id="loadChart"></canvas>
             </div>
         </div>
 
         <div id="processes" class="content">
-            <h2>サーバ側のリアルタイムビューアー (1秒ごと)</h2>
+            <h2>Server-side User Processes (5 Sec)</h2>
             <div id="process-container" class="process-grid"></div>
         </div>
 
-        <div id="analysis-modal" class="modal hidden">
+        <!--<div id="analysis-modal" class="modal hidden">
             <div id="wait-spinner-analysis" class="spinner hidden"></div>
             <div class="modal-content">
                 <span id="modal-close" class="close-button">&times;</span>
@@ -796,7 +108,7 @@
                 <p><strong>Recommended Action:</strong> <span id="recommended-action"></span></p>
                 <button id="case-action-button" class="case-button"></button>
             </div>
-        </div>
+        </div>-->
     </div>
     <script src="/js/bundle.js"></script>
 </body>

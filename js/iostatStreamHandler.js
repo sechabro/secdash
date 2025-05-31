@@ -3,41 +3,22 @@ export function startIostatStream() {
 
     iostatEventSource.onmessage = function (event) {
         const readings = JSON.parse(event.data);
-        if (!window.ioChart || !window.cpuChart || !window.diskOpsChart || !window.loadChart) return;
-
-        ioChart.data.labels = [];
-        ioChart.data.datasets[0].data = [];
+        if (!window.cpuChart) return;
 
         cpuChart.data.labels = [];
         cpuChart.data.datasets.forEach(ds => ds.data = []);
 
-        diskOpsChart.data.labels = [];
-        diskOpsChart.data.datasets.forEach(ds => ds.data = []);
-
-        loadChart.data.labels = [];
-        loadChart.data.datasets[0].data = [];
-
         readings.forEach(data => {
-            ioChart.data.labels.push(data.time);
             cpuChart.data.labels.push(data.time);
-            diskOpsChart.data.labels.push(data.time);
-            loadChart.data.labels.push(data.time);
+            cpuChart.data.datasets[0].data.push(parseFloat(data.user));
+            cpuChart.data.datasets[1].data.push(parseFloat(data.nice));
+            cpuChart.data.datasets[2].data.push(parseFloat(data.system));
+            cpuChart.data.datasets[3].data.push(parseFloat(data.iowait));
+            cpuChart.data.datasets[4].data.push(parseFloat(data.steal));
+            cpuChart.data.datasets[5].data.push(parseFloat(data.idle));
 
-            ioChart.data.datasets[0].data.push(parseFloat(data.throughput_mbs));
-
-            cpuChart.data.datasets[0].data.push(parseFloat(data.cpu_idle_pct));
-            cpuChart.data.datasets[1].data.push(parseFloat(data.cpu_user_pct));
-            cpuChart.data.datasets[2].data.push(parseFloat(data.cpu_system_pct));
-
-            diskOpsChart.data.datasets[0].data.push(parseFloat(data.kbt));
-            diskOpsChart.data.datasets[1].data.push(parseInt(data.tps));
-
-            loadChart.data.datasets[0].data.push(parseFloat(data.load_avg_1m));
         });
 
-        ioChart.update();
         cpuChart.update();
-        diskOpsChart.update();
-        loadChart.update();
     };
 }

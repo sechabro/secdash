@@ -2,74 +2,40 @@ import asyncio
 import json
 import logging
 import os
-import random
-import subprocess
 import threading
 import time
 from collections import defaultdict, deque
-from dataclasses import asdict, fields, is_dataclass
+from dataclasses import asdict, is_dataclass
 from datetime import datetime
-from functools import reduce
-from ipaddress import ip_address
-from typing import Any, Callable
+from typing import Any
 
 import psutil
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
-from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from geoip2 import database, errors, webservice
-from pympler import asizeof
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import Session
-from user_agents import parse
 
-from crud import (get_user_by_email, get_visitors, shutdown_db_update,
-                  upsert_failed_login_attempt, visitor_info_post)
+from crud import get_all_ips, upsert_failed_login_attempt
 from database import async_session_maker
-from schemas import FailedLoginIntel, IoStatLineInMem, Visitor
+from schemas import IoStatLineInMem
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 psh = PasswordHasher()
 
-# DB Reader
-db_reader = database.Reader('./GeoLite2-City.mmdb')
-
-# Datastreams
+# Datastreams deque & lock
 iostats = deque(maxlen=30)
 running_ps = deque()
-visitors = deque()
 ssh_lines = deque(maxlen=20)
+ips = deque()
+country_counts = deque()
 ps_lock = threading.Lock()
-visitor_lock = threading.Lock()
 ssh_lock = threading.Lock()
+ips_lock = threading.Lock()
 
-
-def ip_to_blacklist(ip):
-    '''Install ipset: sudo apt-get install ipset -y
-    sudo ipset create blacklist hash:ip
-    By default, ipset rules won't persist across reboots. To make the blacklist persistent:
-    sudo ipset save > /etc/ipset.rules
-    Ensure that ipset restores the rules after a reboot: sudo nano /etc/rc.local
-    Add this line before exit 0: ipset restore < /etc/ipset.rules
-    command to list out ipset info for your blacklist: sudo ipset list blacklist'''
-
-    # Adds an IP to ipset's blacklist.
-    try:
-        # Add IP to the blacklist set
-        subprocess.run(["sudo", "ipset", "add", "blacklist", ip], check=True)
-
-        print(f"Blocked IP: {ip} using ipset.")
-        return {"status": "success", "action": "block_ip", "ip": ip}
-
-    except subprocess.CalledProcessError as e:
-        print(f"Error blocking IP {ip}: {e}")
-        return {"status": "failure", "error": str(e)}
-
-
+'''
+####### SITE USER MONITORING FUTURE USE #############
 async def locale_formatting(client_ip: str) -> str:
-    geo_info = db_reader.city(client_ip)
+    geo_info = db_reader.city(client_ip) # <-- need to install geoip2
     locale_parts = ["city.name",
                     "subdivisions.most_specific.name", "country.name"]
     locale_info = []
@@ -80,6 +46,7 @@ async def locale_formatting(client_ip: str) -> str:
         except AttributeError:
             locale_info.append("not found")
     return ", ".join(locale_info)
+'''
 
 
 async def established_connections():
@@ -141,6 +108,14 @@ def serialize(item: Any):
         return asdict(item)
     return item  # assuming it's already a dict
 
+# DRAGON [2025-05-27]: stream_delivery() has mutated into an
+# overloaded multi-purpose stream processor responsible for sorting,
+# filtering, grouping, pagination, and SSE serialization for any
+# arbitrary data type. It needs serious breaking up. But that will
+# require a serious refactor of all SSE and perhaps even dataclass
+# schemas. This comes after MVP deployment. Until then: leave it
+# alone, and no more integrations with it.
+
 
 async def stream_delivery(
     data_stream: deque,
@@ -175,8 +150,6 @@ async def stream_delivery(
                 if get_field_value(item, filter_field) == filter_param
             ]
 
-        # DRAGON [2025-05-10]: SLAYED. Grouping modularized and decoupled.
-        # Grouping
         if group:
             grouping_snapshot = list(data_stream)
             new_snapshot = group_by_keys(
@@ -242,18 +215,16 @@ async def ps_stream(script: str | None = None):
                         running_ps.extend(ps_deque_swap)
                     ps_deque_swap.clear()
             else:
-                ps_deque_swap.append(
-                    dict(
-                        zip(
-                            ["timestamp", "pid", "ppid", "user", "cpu_pct", "stat",
-                                "start", "time", "command"],
-                            line.decode().strip().split(",")
-                        )
-                    )
-                )
+                columns = ["timestamp", "pid", "ppid", "user",
+                           "cpu_pct", "stat", "start", "time", "command"]
+                fields = line.decode().strip().split(",")
 
-    except KeyboardInterrupt:
-        print("Stopping...")
+                # pad fields to full length if command value is missing
+                fields += ["n/a"] * (len(columns) - len(fields))
+                ps_deque_swap.append(dict(zip(columns, fields)))
+
+    except Exception as e:
+        logger.info(f' EXCEPTION: {e}')
         processes.terminate()
 
 ################################################################
@@ -267,23 +238,22 @@ async def io_stream(script: str | None = None):
     try:
         logger.info(f' Iostat stream starting.')
         async for line in iostat_data.stdout:
-            (date, time, kbt, tps, mbs, user, sys, idle,
-             load) = line.decode().strip().split(",")
+            (date, time, user, nice, sys, iowait, steal,
+             idle) = line.decode().strip().split(",")
             iostats.append(
                 IoStatLineInMem(
                     date=date,
                     time=time,
-                    kbt=float(kbt),
-                    tps=int(tps),
-                    throughput_mbs=float(mbs),
-                    cpu_user_pct=float(user),
-                    cpu_system_pct=float(sys),
-                    cpu_idle_pct=float(idle),
-                    load_avg_1m=float(load)
+                    user=float(user),
+                    nice=float(nice),
+                    system=float(sys),
+                    iowait=float(iowait),
+                    steal=float(steal),
+                    idle=float(idle)
                 )
             )
-    except KeyboardInterrupt:
-        print("Stopping...")
+    except Exception as e:
+        logger.error(f' EXCEPTION: {e}')
         iostat_data.terminate()
 
 ################################################################
@@ -330,107 +300,48 @@ async def ssh_stream(script: str | None = None):
         print("Stopping SSH Monitor...")
         ssh_data.terminate()
 
-####### VISITOR ################################################
-######## ACTIVITY ##############################################
-########## GENERATION ##########################################
-# This data is designed to mimic the logging in, logging out,
-# idle time, active time, and session activity of users to a site
-# that SecDash is tasked with monitoring. For now, this data is
-# generated for demo purposes. Abuse IPDB data is also generated,
-# to avoid potential issues with over-calling their api in short-
-# timespans.
 
-
-async def visitor_stream(visitor_list: list | None = None):
-    global visitors
-    try:
-        visitor_deque_swap = deque()
-        async for visitor in visitor_list:
-            visitor_deque_swap.append(visitor)
-            if visitor_deque_swap:
-                with visitor_lock:
-                    visitors.clear()
-                    visitors.extend(visitor_deque_swap)
-                visitor_deque_swap.clear()
-    except KeyboardInterrupt:
-        print("Stopping...")
-
-
-async def visitor_activity_gen():
-    global visitors
-    try:
-        async with async_session_maker() as session:
-            db_visitors = await get_visitors(session)
-            # logger.info(f' VISITORS: {db_visitors}\n\n')
-            active_visitors = [v for v in db_visitors if v.is_active]
-            inactive_visitors = [v for v in db_visitors if not v.is_active]
-
-            while True:
-                # Mutate the visitors
-                # Example: activate some, idle some, log out some
-                to_activate = random.sample(inactive_visitors, k=min(
-                    len(inactive_visitors), random.randint(1, 5)))
-                for visitor in to_activate:
-                    visitor.is_active = True
-                    visitor.last_active = datetime.now().isoformat()
-                    visitor.time_idle = 0
-                    active_visitors.append(visitor)
-                    inactive_visitors.remove(visitor)
-
-                for visitor in active_visitors:
-                    if random.random() < 0.7:
-                        visitor.last_active = datetime.now().isoformat()
-                        visitor.time_idle = 0
-                    else:
-                        visitor.time_idle += random.randint(10, 40)
-
-                to_logout = random.sample(active_visitors, k=min(
-                    len(active_visitors), max(1, len(active_visitors) // 20)))
-                for visitor in to_logout:
-                    visitor.is_active = False
-                    visitor.time_idle = 0
-                    inactive_visitors.append(visitor)
-                    active_visitors.remove(visitor)
-
-                # Push updated list into the global deque
-                updated_visitors = active_visitors + inactive_visitors
-                with visitor_lock:
-                    visitors.clear()
-                    visitors.extend([v for v in updated_visitors])
-                '''vis_list = list(visitors)
-                byte_syze = asizeof.asizeof(vis_list)
-                in_mb = byte_syze / (1024 * 1024)
-                logger.info(
-                    f' Total memory used by Visitor List: {byte_syze} bytes ({in_mb:.2f} MB)"')
-                # Memory used per key across all visitors
-                field_memory = defaultdict(int)
-
-                # Sum up memory usage of each field individually
-                for visitor in vis_list:
-                    for field in fields(visitor):
-                        key = field.name
-                        value = getattr(visitor, key)
-                        field_memory[key] += asizeof.asizeof(value)
-
-                # Sort and display results
-                sorted_fields = sorted(field_memory.items(),
-                                       key=lambda x: x[1], reverse=True)
-
-                logger.info("Memory usage by field (descending):")
-                for key, size in sorted_fields:
-                    logger.info(f"{key:20}: {size / 1024:.2f} KB")'''
-
-                await asyncio.sleep(random.randint(20, 40))
-    except Exception as e:
-        logger.exception(f' EXCEPTION: {e}')
-
-
-async def persist_visitors() -> bool:
+async def ip_stream_manager():
+    global ips, country_counts
+    old_snapshot = []
+    logger.info(f' IP info stream starting.')
     async with async_session_maker() as session:
-        with visitor_lock:
-            updates = list(visitors)
-            shutdown_update = await shutdown_db_update(session=session, visitor_list=updates)
-            return shutdown_update
+        while True:
+            ips_rows = await get_all_ips(session=session)
+            temp_counts = defaultdict(int)
+            new_snapshot = [asdict(row) for row in ips_rows]
+
+            for row in new_snapshot:
+                country = row.get("country")
+                if country == "HK" or country == "TW":
+                    temp_counts["CN"] += 1
+                else:
+                    temp_counts[country] += 1
+
+            if new_snapshot != old_snapshot:
+                with ips_lock:
+                    ips.clear()
+                    ips.extend(ips_rows)
+                    country_counts = dict(temp_counts)
+                old_snapshot = new_snapshot
+            else:
+                pass
+            await asyncio.sleep(30)
+
+
+async def ip_stream_delivery():
+    global ips, country_counts
+    old_snapshot = []
+    while True:
+        await asyncio.sleep(2)
+        with ips_lock:
+            new_snapshot = [asdict(ip) for ip in ips]
+            counts_snapshot = country_counts
+        if new_snapshot != old_snapshot:
+            yield f"data: {json.dumps({'ips': new_snapshot, 'country_counts': counts_snapshot})}\n\n"
+            old_snapshot = new_snapshot
+        else:
+            pass
 
 
 async def host_info_async() -> dict:

@@ -1,47 +1,12 @@
 import Chart from 'chart.js/auto';
 
 document.addEventListener("DOMContentLoaded", () => {
-    const ioCtx = document.getElementById('ioChart')?.getContext('2d');
     const cpuCtx = document.getElementById('cpuChart')?.getContext('2d');
-    const diskOpsCtx = document.getElementById('diskOpsChart')?.getContext('2d');
-    const loadCtx = document.getElementById('loadChart')?.getContext('2d');
 
-    if (!ioCtx || !cpuCtx || !diskOpsCtx || !loadCtx) {
+    if (!cpuCtx) {
         console.warn("Canvas elements not found");
         return;
     }
-
-    window.ioChart = new Chart(ioCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: 'Throughput (MB/s)',
-                    data: [],
-                    borderColor: '#00adee',
-                    fill: false,
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            aspectRatio: 16 / 9,
-            interaction: {
-                mode: 'nearest',
-                intersect: false,
-            },
-            scales: {
-                x: {
-                    title: { display: true, text: 'Time' }
-                },
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
 
     window.cpuChart = new Chart(cpuCtx, {
         type: 'line',
@@ -49,123 +14,75 @@ document.addEventListener("DOMContentLoaded", () => {
             labels: [],
             datasets: [
                 {
-                    label: 'CPU Idle (%)',
+                    label: 'Idle (%)',
                     data: [],
                     borderColor: '#10b981',
-                    fill: false
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    fill: true
                 },
                 {
-                    label: 'CPU User (%)',
+                    label: 'User (%)',
                     data: [],
                     borderColor: '#ef4444',
-                    fill: false
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    fill: true
                 },
                 {
-                    label: 'CPU System (%)',
+                    label: 'Nice (%)',
+                    data: [],
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                    fill: true
+                },
+                {
+                    label: 'System (%)',
                     data: [],
                     borderColor: '#f59e0b',
-                    fill: false
+                    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                    fill: true
+                },
+                {
+                    label: 'I/O Wait (%)',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                    fill: true
+                },
+                {
+                    label: 'Steal (%)',
+                    data: [],
+                    borderColor: '#ec4899',
+                    backgroundColor: 'rgba(236, 72, 153, 0.2)',
+                    fill: true
                 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            aspectRatio: 16 / 9,
+            aspectRatio: 2 / 1,
             interaction: {
                 mode: 'nearest',
                 intersect: false,
             },
             scales: {
                 x: {
+                    stacked: false,
                     title: { display: true, text: 'Time' }
                 },
                 y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-
-    window.diskOpsChart = new Chart(diskOpsCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: 'Kilobytes per Transfer (KB/t) - Left',
-                    data: [],
-                    borderColor: '#10b981',
-                    fill: false,
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'Transactions per Second (TPS) - Right',
-                    data: [],
-                    borderColor: '#ef4444',
-                    fill: false,
-                    yAxisID: 'y1'
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            aspectRatio: 16 / 9,
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
-            stacked: false,
-            scales: {
-                x: {
-                    title: { display: true, text: 'Time' }
-                },
-                y: {
-                    type: 'linear',
-                    position: 'left',
-                },
-                y1: {
-                    type: 'linear',
-                    position: 'right',
-                    grid: {
-                        drawOnChartArea: false,
-                    }
-                }
-            }
-        }
-    });
-
-    window.loadChart = new Chart(loadCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: '1 Min Load Avg.',
-                    data: [],
-                    borderColor: '#f59e0b',
-                    fill: false
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            aspectRatio: 16 / 9,
-            interaction: {
-                mode: 'nearest',
-                intersect: false,
-            },
-            scales: {
-                x: {
-                    title: { display: true, text: 'Time' }
-
-                },
-                y: {
+                    stacked: false,
                     beginAtZero: true,
-                    grid: {
-                        drawOnChartArea: false
+                    max: 100,
+                    title: { display: true, text: 'CPU %' }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            return `${context.dataset.label}: ${context.raw.toFixed(2)}%`;
+                        }
                     }
                 }
             }

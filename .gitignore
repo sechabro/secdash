@@ -182,3 +182,5 @@ cython_debug/
 # NPM-related
 node_modules/
 js/bundle.js
+js/not_in_use
+to_do.txt

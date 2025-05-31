@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel
 
-from schemas import FailedLoginInMem, VisitorInMem
+from schemas import FailedLoginInMem
 
 load_dotenv()
 
@@ -18,7 +18,7 @@ openai_key = os.getenv("OPENKEY001")
 client = OpenAI(api_key=openai_key)
 
 
-async def analyze_visitor(visitor: VisitorInMem):
+'''async def analyze_visitor(visitor: VisitorInMem):
     prompt = f"""
     You are an AI security analyst. Evaluate the following visitor activity and return a JSON object with:
     - "risk_level" (low, medium, or high)
@@ -49,7 +49,7 @@ async def analyze_visitor(visitor: VisitorInMem):
         result = response.choices[0].message.content.strip()
         return json.loads(result)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))'''
 
 
 async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
@@ -61,15 +61,16 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
 
     Example:
     {{
+      "ip_address": "{ip.ip}",
       "risk_level": "red",
       "analysis": "...",
       "recommended_action": "ban"
     }}:
 
     Permitted values per key:
-    - "risk_level" (green, yellow, orange, red, black)
-    - "analysis" (explain your reasoning)
-    - "recommended_action" (none, review, flag, ban, autoban)
+    - "risk_level" one of ["green", "yellow", "orange", "red", "black"]
+    - "analysis" (a short but clear explanation justifying the action)
+    - "recommended_action" one of ["none", "flagged", "suspend", "ban", "autoban"]
 
     Adhere to this table for permitted risk_level
     and recommended_action pairs:
@@ -77,8 +78,8 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
     | Risk Level | Allowed Actions           |
     |------------|---------------------------|
     | black      | autoban                   |
-    | red        | flag, ban                 |
-    | orange     | review, flag              |
+    | red        | suspend, ban              |
+    | orange     | flag, suspend             |
     | yellow     | review                    |
     | green      | none                      |
 
@@ -103,10 +104,13 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
     except Exception as e:
         return {"error": str(e), "ip_info": ip}
 
+
 # DRAGON [2025-05-23]: scaling issue with asyncio.gather()
 # It might be necessary to replace asyncio.gather() if too many
 # items are added at once. Consider asyncio.Queue, asyncio.Semaphore.
 # Monitor for now.
+
+
 async def ip_analysis_gathering(ip_info: list[FailedLoginInMem]) -> list[dict]:
     tasks = [analyze_ip_address(ip) for ip in ip_info]
     return await asyncio.gather(*tasks)
@@ -127,30 +131,10 @@ async def ipabuse_check(ip: str):
         response = await client.get(url, headers=headers, params=params)
         response.raise_for_status()  # raises an error for bad responses
 
-    return response.json()
+    return response.json().get("data", {})
 
 
-
-
-'''if __name__ == "__main__":
-    ip_1 = FailedLoginInMem(
-    ip="170.64.183.222",
-    score=100,
-    is_tor=False,
-    total_reports=340,
-    first_seen="2025-05-21 13:09:35.609629",
-    last_seen="2025-05-21 13:28:47.205986",
-    count=234
-)
-
-    ip_2 = FailedLoginInMem(
-    ip="49.64.85.138",
-    score=100,
-    is_tor=False,
-    total_reports=2691,
-    first_seen="2025-05-21 12:49:35.532544",
-    last_seen="2025-05-21 12:49:35.532544",
-    count=3
-)
-    results = asyncio.run(ip_analysis_gathering(ip_info=[ip_1, ip_2]))
-    print(results)'''
+'''
+if __name__ == "__main__":
+    test stuff here
+'''
