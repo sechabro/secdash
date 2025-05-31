@@ -25,7 +25,15 @@ export const nameToCode = Object.fromEntries(
     Object.entries(countryMap).map(([code, name]) => [name, code])
 );
 
-export let mapChart = null;
+let _mapChart = null;
+
+export function setMapChart(instance) {
+    _mapChart = instance;
+}
+
+export function getMapChart() {
+    return _mapChart;
+}
 
 export function renderWorldMap(country_counts) {
     const mapContainer = document.getElementById('ip-map');
@@ -34,8 +42,9 @@ export function renderWorldMap(country_counts) {
         return;
     }
 
-    if (!mapChart) {
-        mapChart = echarts.init(mapContainer);
+    if (!getMapChart()) {
+        const chart = echarts.init(mapContainer);
+        setMapChart(chart);
     }
 
     const allCountryCodes = Object.keys(countryMap);
@@ -85,9 +94,9 @@ export function renderWorldMap(country_counts) {
         }]
     };
 
-    mapChart.setOption(option);
+    getMapChart().setOption(option);
 
-    mapChart.on('click', function (params) {
+    getMapChart().on('click', function (params) {
         const countryName = params.name;
         const countryCode = nameToCode[countryName];
 

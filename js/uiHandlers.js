@@ -1,4 +1,4 @@
-import { mapChart } from './mapEChart.js';
+import { getMapChart } from './mapEChart.js';
 
 export function initializeUIHandlers() {
     // TAB SWITCHING HANDLER
@@ -12,8 +12,13 @@ export function initializeUIHandlers() {
             window.fetchHostStatus();
         } else if (tabId === 'connections') {
             window.runWhenReady(() => window.fetchConnectionsData());
-        } else if (tabId === 'ip-panel-section' && mapChart) {
-            mapChart.resize();
+        } else if (tabId === 'ip-panel-section') {
+            const chart = getMapChart();
+            if (chart) {
+                chart.resize();
+            } else {
+                console.warn("⚠️ mapChart not initialized yet — resize skipped.");
+            }
         }
     }
     window.showTab = showTab;  // Expose globally for your <div onclick="showTab('...')">
