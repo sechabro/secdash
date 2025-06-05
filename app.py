@@ -37,6 +37,7 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 app = FastAPI()
 app.mount("/js", StaticFiles(directory="js"), name="js")
 app.mount("/styles", StaticFiles(directory="styles"), name="styles")
+app.mount("/img", StaticFiles(directory="img"), name="img")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 

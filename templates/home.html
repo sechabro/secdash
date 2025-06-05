@@ -4,194 +4,61 @@
 <head>
     <meta charset="UTF-8">
     <title>Welcome to SecDash</title>
-    <style>
-        /* Ensure the page takes full viewport height and use flexbox */
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            /* vertical centering */
-            align-items: center;
-            /* horizontal centering */
-            min-height: 100vh;
-            background-color: #dadada;
-            font-family: sans-serif;
-        }
-
-        h1 {
-            color: #333333;
-            font-size: 70px;
-            text-align: center;
-            margin-block-start: 0.1em;
-            margin-block-end: 0.1em;
-        }
-
-        form {
-            margin-block-start: 0.1em;
-            margin-block-end: 0.1em;
-            padding: 20px;
-            background: #00adee;
-            border-radius: 8px;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.8);
-            max-width: 400px;
-            width: 100%;
-        }
-
-        form label {
-            color: #333333;
-            display: block;
-            margin: 10px 0 5px;
-            text-align: left;
-        }
-
-        form input {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
-            box-sizing: border-box;
-        }
-
-        form button {
-            padding: 10px 20px;
-            background-color: #333333;
-            ;
-            /* Black login button */
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            display: block;
-            margin: 0 auto;
-        }
-
-        form button:hover {
-            background-color: #222222;
-        }
-
-        p {
-            margin-top: 20px;
-            color: #333333;
-            /* Same as the title */
-            text-align: center;
-        }
-
-        p a {
-            color: #000;
-            /* "Register here" link in black */
-            text-decoration: none;
-        }
-
-        p a:hover {
-            text-decoration: underline;
-        }
-
-        /* Modal Background */
-        .modal {
-            display: none;
-            /* Hidden by default */
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-
-        /* Modal Content */
-        .modal-content {
-            background-color: #fefefe;
-            margin: 10% auto;
-            /* padding: 20px; */
-            /* border: 1px solid #888; */
-            width: 100%;
-            max-width: 400px;
-            border-radius: 8px;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.8);
-        }
-
-        /* Form Header within Modal (holds title and close button) */
-        .form-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .form-header h2 {
-            margin: 0;
-            font-size: 24px;
-            color: #333333;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            font-size: 28px;
-            cursor: pointer;
-            color: #aaa;
-        }
-
-        .close-btn:hover {
-            color: #333333;
-        }
-
-        /* Modal Form */
-        form {
-            background: #00adee;
-            border-radius: 8px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        form label {
-            color: #333333;
-            margin-top: 10px;
-            text-align: left;
-        }
-
-        form input {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-
-        form button[type="submit"] {
-            padding: 10px 20px;
-            background-color: #333333;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 10px auto 0;
-        }
-
-        form button[type="submit"]:hover {
-            background-color: #222222;
-        }
-    </style>
+    <link rel="stylesheet" , href="/styles/home.css">
 </head>
 
 <body>
-    <h1>Welcome to SecDash</h1>
+    <nav class="navbar">
+        <img src="/img/secdash_icon_40.png" alt="SecDash Logo" class="logo">
+        <div class="nav-left">
+            <a href="#">SecDash</a>
+        </div>
+        <div class="nav-right">
+            <a href="#about-section">About</a>
+            <a href="#login-form">Login</a>
+        </div>
+    </nav>
+    <section id="top-section" class="hero">
+        <img src="/img/secdash_lh.png" alt="SecDash Logo" class="hero-logo">
+    </section>
+    <section id="about-section" class="about-section">
+        <div class="about-content">
+            <h2>Welcome to SecDash</h2>
+            <hr class="about-divider">
+            <div class="about-text">
+                <p>There is an old Japanese proverb "灯台下暗し" which translates to "It's darkest at the bottom of the
+                    lighthouse". Meaning: it's hard to see what's going on right underneath you.</p>
 
-    <!-- Login Form -->
-    <form id="login-form" action="/login" method="POST">
-        <label for="username">Email:</label>
-        <input type="username" id="username" name="username" required>
+                <p>For developers hosting on VPS services, observable security metrics are crucial to know precisely how
+                    IP addresses around the internet are trying to mess with your server. SecDash was created to
+                    increase this observability. A real-time security observability platform built for developers and
+                    non-developers, sysadmins, and anyone managing their own infrastructure. It shows you who's knocking
+                    on your server, where they’re from, how often they’re trying, and what they’re trying to do.
+                    It analyzes suspicious activity using AI, correlates data across multiple tools, and even runs
+                    behind-the-scenes automation, banning malicious IPs and surfacing patterns you might’ve missed</p>
 
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
+                <p>SecDash is the lamp post at the base of your lighthouse. </p>
+            </div>
+        </div>
+    </section>
 
-        <button id="login-button" type="submit">Log In</button>
-    </form>
+    <section id="login-section" class="login-section">
+        <main class="main-content">
+            <h2 class="login-heading">Access SecDash</h2>
+            <!-- Login Form -->
+            <form id="login-form" action="/login" method="POST">
+                <label for="username">Email:</label>
+                <input type="username" id="username" name="username" required>
+
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+
+                <button id="login-button" type="submit">Log In</button>
+            </form>
+
+        </main>
+    </section>
+
 
     <!-- Registration Link. Turn back on after frontend character checks are complete. -->
     <!--<p>Not a member yet? <a href="#" id="register-link">Register here</a></p>-->
