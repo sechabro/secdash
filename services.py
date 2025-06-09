@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel
+from sqlalchemy import false
 
 from schemas import FailedLoginInMem
 
@@ -69,8 +70,16 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
 
     Permitted values per key:
     - "risk_level" one of ["green", "yellow", "orange", "red", "black"]
-    - "analysis" (a short but clear explanation justifying the action)
+    - "analysis" (a clear and concise explanation justifying the action)
     - "recommended_action" one of ["none", "flagged", "suspend", "ban", "autoban"]
+
+    If an IP has an Abuse IPDB confidence score over 90, is a 
+    known Tor exit node, or has more than 500 Abuse IPDB reports, it 
+    should be considered high risk. Combining two or more of these 
+    factors warrants a 'black' risk level. Do not hesitate to 
+    assign 'black' when strong indicators of malicious activity are 
+    present. Your priority is to protect the server, even at the 
+    cost of false positives.
 
     Adhere to this table for permitted risk_level
     and recommended_action pairs:
@@ -134,7 +143,15 @@ async def ipabuse_check(ip: str):
     return response.json().get("data", {})
 
 
-'''
-if __name__ == "__main__":
-    test stuff here
-'''
+'''if __name__ == "__main__":
+    test_ip = FailedLoginInMem(
+        ip="27.150.182.11",
+        score=97,
+        is_tor=False,
+        total_reports=500,
+        count=10,
+        first_seen='2025-05-29 00:02:21.713862',
+        last_seen='2025-05-29 00:54:59.445423'
+    )
+    result = asyncio.run(ip_analysis_gathering(ip_info=[test_ip]))
+    print(result)'''

@@ -168,8 +168,8 @@ async def ai_analysis_update(ip_updates: list[dict]):
             successful = 0
             for entry in ip_updates:
                 status = None
-                if entry["recommended_action"] == "autobanned":  # <--- autoban automation
-                    await run_in_threadpool(ipset_calls, ip=entry["ip_address"], action="blacklist")
+                if entry["recommended_action"] == "autoban":  # <--- autoban automation
+                    await run_in_threadpool(ipset_calls, ip=entry["ip_address"], action="banned")
                     status = schemas.CurrentStatus.banned
                 stmt = (
                     update(schemas.FailedLoginIntel)
@@ -202,6 +202,7 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
         logger.info(f' SSH monitoring started')
         while True:
             async with async_session_maker() as session:
+                await asyncio.sleep(120)
                 stmt = select(schemas.FailedLoginIntel).where(
                     (schemas.FailedLoginIntel.analysis == None) |
                     (schemas.FailedLoginIntel.risk == None) |
@@ -225,7 +226,6 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
 
                 analyzed_ips = await ip_analysis_gathering(ip_info=for_analysis)
                 await ai_analysis_update(ip_updates=analyzed_ips)
-                await asyncio.sleep(60)
 
     except Exception as e:
         logger.error(f' 🤮 IP analysis loop crashed: {e}')
