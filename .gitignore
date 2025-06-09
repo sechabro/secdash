@@ -185,3 +185,4 @@ js/bundle.js
 js/not_in_use
 to_do.txt
 *.sql
+secret_user.py
