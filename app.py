@@ -199,7 +199,7 @@ async def dashboard(request: Request, session: SessionDep, current_user: str = D
 
 @app.get("/connections")
 async def connections(current_user: str = Depends(get_current_user)) -> list:
-    return await established_connections()
+    return await run_in_threadpool(established_connections)
 
 
 @app.get("/host")
