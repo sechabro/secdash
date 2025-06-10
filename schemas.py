@@ -25,6 +25,7 @@ class ActionType(str, enum.Enum):
     suspend = "suspend"
     ban = "ban"
     autoban = "autoban"
+    review = "review"
 
 
 class CurrentStatus(str, enum.Enum):
