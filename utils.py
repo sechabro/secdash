@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 import threading
 import time
 from collections import defaultdict, deque
@@ -49,33 +50,27 @@ async def locale_formatting(client_ip: str) -> str:
 '''
 
 
-async def established_connections():
-    result = await asyncio.create_subprocess_shell(
-        cmd="lsof -i -P -n | awk '/ESTABLISHED/ && $9 ~ /->/ {split($9, addr, \"->\"); print $1 \",\" $2 \",\" $3 \",\" $4 \",\" $5 \",\" $6 \",\" $7 \",\" $8 \",\" addr[2]}'",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
-    # returns a tuple of stdout and stderr
-    stdout_bytes, stderr_bytes = await result.communicate()
-    # Decoding to string and stripping all white space if exists -> "value,value,value,value" format per line
-    output = stdout_bytes.decode().strip()
-    if not output:
-        return []
-
+def established_connections():
     excluded_cmds = {"rapportd", "identitys", "corespeec", "PowerChim"}
 
-    return [conn for conn in
-            [
-                dict(zip(
-                    ["cmd", "pid", "user", "fd", "type",
-                     "device", "size/off", "node", "address"],
-                    line.split(",")
-                ))
-                # for line in result.stdout.strip().split("\n") if line
-                for line in output.split("\n") if line
-            ]
-            if conn.get("cmd") not in excluded_cmds
-            ]
+    cmd = "lsof -i -P -n | awk '/ESTABLISHED/ && $9 ~ /->/ {split($9, addr, \"->\"); print $1 \",\" $2 \",\" $3 \",\" $4 \",\" $5 \",\" $6 \",\" $7 \",\" $8 \",\" addr[2]}'"
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+    if not result.stdout:
+        return []
+
+    return [
+        conn for conn in [
+            dict(zip(
+                ["cmd", "pid", "user", "fd", "type",
+                 "device", "size/off", "node", "address"],
+                line.split(",")
+            ))
+            for line in result.stdout.strip().split("\n") if line
+        ]
+        if conn.get("cmd") not in excluded_cmds
+    ]
+
 
 ######################### UNIVERSAL BASH SCRIPT RUNNER ########################
 # Call this when you need to run a background process, specifically for system
