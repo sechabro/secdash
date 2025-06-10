@@ -191,6 +191,7 @@ async def ai_analysis_update(ip_updates: list[dict]):
                 except Exception as e:
                     logger.error(
                         f' Failed to execute update for {entry.get("ip_address")} {e}')
+                    await session.rollback()
             await session.commit()
             # return {"successful_updates": successful}
         except Exception as e:
