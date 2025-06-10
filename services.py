@@ -71,7 +71,7 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
     Permitted values per key:
     - "risk_level" one of ["green", "yellow", "orange", "red", "black"]
     - "analysis" (a clear and concise explanation justifying the action)
-    - "recommended_action" one of ["none", "flag", "review", "suspend", "ban", "autoban"]
+    - "recommended_action" one of ["monitor", "flag", "review", "suspend", "ban", "autoban"]
 
     If an IP has an Abuse IPDB confidence score over 90, is a 
     known Tor exit node, or has more than 500 Abuse IPDB reports, it 
@@ -90,7 +90,7 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
     | red        | suspend, ban              |
     | orange     | flag, suspend             |
     | yellow     | review                    |
-    | green      | none                      |
+    | green      | monitor                   |
 
     Do not include any markdown formatting.
 
