@@ -21,7 +21,7 @@ class RiskLevel(str, enum.Enum):
 
 class ActionType(str, enum.Enum):
     none = "none"
-    flagged = "flagged"
+    flag = "flag"
     suspend = "suspend"
     ban = "ban"
     autoban = "autoban"
