@@ -18,7 +18,7 @@
 - Create the systemd service that will restore ipset based on the rules you just created, on reboot: `touch /etc/systemd/system/ipset-restore.service`
 - `vim` into the file and create the service conditions:
 
-####
+```
 [Unit]
 Description=Restore ipset rules
 After=network.target
@@ -30,11 +30,11 @@ RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
-####
+```
 
 - As above, do the same for iptables to restore on reboot: `touch /etc/systemd/system/iptables-restore.service`. Then, `vim` into the file and create the service conditions:
 
-####
+```
 [Unit]
 Description=Restore iptables firewall rules
 After=network.target
@@ -46,7 +46,7 @@ RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
-####
+```
 
 - Enable the services: `systemctl enable ipset-restore.service && systemctl enable iptables-restore.service`
 
