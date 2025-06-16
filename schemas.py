@@ -80,6 +80,7 @@ class FailedLoginInMem:
     is_tor: bool  # IPDB isTor value
     total_reports: int  # IPDB report tally
     count: int  # total attempts on this server at time of analysis
+    ip_id: int | None = None
     risk: str | None = None
     status: str | None = None
     reco_action: str | None = None
@@ -190,5 +191,6 @@ class AlertInMem:
     alert_type: AlertType
     msg: str
     ip: str
+    ip_id: int | None = None
     alert_id: int | None = None
     status: AlertStatus | None = None

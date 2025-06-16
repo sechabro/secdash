@@ -174,7 +174,8 @@ async def insert_alert_from_mem(session: AsyncSession, alert: schemas.AlertInMem
         ip_address=alert.ip,
         msg=alert.msg,
         date=alert.timestamp,
-        status=schemas.AlertStatus.unread
+        status=schemas.AlertStatus.unread,
+        ip_id=alert.ip_id
     )
     session.add(alert_db)
     await session.flush()  # <-- to get access to the assigned id
@@ -191,9 +192,10 @@ async def ai_analysis_update(ip_updates: list[dict]):
                     timestamp = datetime.now(timezone.utc)
                     alert = schemas.AlertInMem(
                         timestamp=timestamp,
-                        ip=entry["ip_address"],
+                        ip=entry.get("ip_address"),
                         msg=f"Logged New IP {entry['ip_address']}!",
-                        alert_type=schemas.AlertType.new_ip
+                        alert_type=schemas.AlertType.new_ip,
+                        ip_id=entry.get("ip_id")
                     )
                     try:
                         status = None
@@ -255,7 +257,8 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
                         total_reports=result.ipdb.get("totalReports"),
                         first_seen=result.first_seen.isoformat(),
                         last_seen=result.last_seen.isoformat(),
-                        count=result.count
+                        count=result.count,
+                        ip_id=result.id
                     )
                     for result in results
                     if result.ipdb is not None

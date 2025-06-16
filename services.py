@@ -63,6 +63,7 @@ async def analyze_ip_address(ip: FailedLoginInMem) -> dict:
     Example:
     {{
       "ip_address": "{ip.ip}",
+      "ip_id": "{ip.ip_id}
       "risk_level": "red",
       "analysis": "...",
       "recommended_action": "ban"
