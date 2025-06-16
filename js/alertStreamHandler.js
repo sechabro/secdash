@@ -1,10 +1,16 @@
 import { showToast } from './toastManager.js';
 
 export function startAlertStream() {
-    console.log("⚡ Alert stream initialized");
+    console.log("Alert stream initialized");
+
     const eventSource = new EventSource('/alert-stream');
 
     eventSource.onmessage = (event) => {
+        if (event.data === "keepalive") {
+            // keep the stream connected, but do nothing
+            return;
+        }
+
         try {
             const data = JSON.parse(event.data);
             const alerts = Array.isArray(data) ? data : [data]; // ensure array
