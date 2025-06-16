@@ -346,7 +346,7 @@ async def ip_stream_delivery():
 
 
 async def alert_stream_delivery(request: Request):
-    alerts_queue._queue.clear()
+    # alerts_queue._queue.clear()
     while True:
         if await request.is_disconnected():
             break
