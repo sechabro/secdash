@@ -183,7 +183,8 @@ async def insert_alert_from_mem(session: AsyncSession, alert: schemas.AlertInMem
 
 
 async def ai_analysis_update(ip_updates: list[dict]):
-    async with async_session_maker() as session:
+    logger.info(f' still in analysis update...')
+    '''async with async_session_maker() as session:
         try:
             successful = 0
             for entry in ip_updates:
@@ -232,7 +233,7 @@ async def ai_analysis_update(ip_updates: list[dict]):
             logger.info(f" Alerts queued successfully.")
 
         except Exception as e:
-            logger.error(f' Session Failure: {e}')
+            logger.error(f' Session Failure: {e}')'''
 
 
 async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
@@ -240,17 +241,13 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
         logger.info(f' SSH monitoring started')
         while True:
             async with async_session_maker() as session:
-                await asyncio.sleep(120)
+                await asyncio.sleep(3)
                 stmt = select(schemas.FailedLoginIntel).where(
                     (schemas.FailedLoginIntel.analysis == None) |
                     (schemas.FailedLoginIntel.risk == None) |
                     (schemas.FailedLoginIntel.action == schemas.ActionType.none)
                 )
                 results = (await session.execute(stmt)).scalars().all()
-
-                if not results:
-                    logger.info(f' Heartbeat. No new IP addresses detected.')
-                    continue
 
                 for_analysis = [
                     schemas.FailedLoginInMem(
@@ -265,6 +262,10 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
                     for result in results
                     if result.ipdb is not None
                 ]
+
+                if not for_analysis:
+                    logger.info(f' Heartbeat. No new IP addresses detected.')
+                    continue
 
                 analyzed_ips = await ip_analysis_gathering(ip_info=for_analysis)
                 await ai_analysis_update(ip_updates=analyzed_ips)
