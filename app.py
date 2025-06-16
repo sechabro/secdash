@@ -6,7 +6,7 @@ from typing import Annotated
 
 import jwt
 from dotenv import load_dotenv
-from fastapi import (Body, Cookie, Depends, FastAPI, Form, HTTPException, Path,
+from fastapi import (Cookie, Depends, FastAPI, Form, HTTPException, Path,
                      Request, Response, status)
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
@@ -19,10 +19,7 @@ from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import crud
-import fake_alerts
 import schemas
-from alembic import command
-from alembic.config import Config
 from database import create_tables, database_check, get_session
 from ipset import ipset_calls
 from utils import (alert_stream_delivery, established_connections,
