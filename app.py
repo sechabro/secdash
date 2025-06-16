@@ -6,8 +6,8 @@ from typing import Annotated
 
 import jwt
 from dotenv import load_dotenv
-from fastapi import (Cookie, Depends, FastAPI, Form, HTTPException, Request,
-                     Response, status)
+from fastapi import (Body, Cookie, Depends, FastAPI, Form, HTTPException, Path,
+                     Request, Response, status)
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
                                StreamingResponse)
@@ -19,13 +19,17 @@ from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import crud
+import fake_alerts
 import schemas
+from alembic import command
+from alembic.config import Config
 from database import create_tables, database_check, get_session
 from ipset import ipset_calls
-from utils import (established_connections, host_info_async, io_stream,
-                   iostats, ip_stream_delivery, ip_stream_manager, ips,
-                   ips_lock, password_hasher, password_verify, ps_stream,
-                   running_ps, ssh_stream, stream_delivery)
+from utils import (alert_stream_delivery, established_connections,
+                   host_info_async, io_stream, iostats, ip_stream_delivery,
+                   ip_stream_manager, ips, ips_lock, password_hasher,
+                   password_verify, ps_stream, running_ps, ssh_stream,
+                   stream_delivery)
 
 load_dotenv()
 
@@ -89,9 +93,14 @@ async def on_startup():
     app.state.ips_task = asyncio.create_task(
         crud.get_unanalyzed_ips()
     )
+
     app.state.ips_stream_task = asyncio.create_task(
         ip_stream_manager()
     )
+    ##### LOCAL DEVELOPMENT USE ONLY #####
+    # app.state.fake_ips_task = asyncio.create_task(
+    #    fake_alerts.fake_alert_stream()
+    # )
     logger.info(f' System metrics streaming started...')
 
 
@@ -150,6 +159,8 @@ async def login(request: Request, response: Response,
     # after, we can safely return the redirect response.
     return redirect_response
 
+#### CHANGE SECURE ARG TO TRUE!!! ####
+
 
 @app.get("/logout")
 def logout():
@@ -207,6 +218,26 @@ async def host_status(current_user: str = Depends(get_current_user)) -> dict:
     return await host_info_async()
 
 
+@app.get("/alerts/{alert_id}")
+async def get_alert(
+    session: SessionDep,
+    alert_id: int = Path(..., description="The alert to look up"),
+    current_user: str = Depends(get_current_user)
+):
+    result = await crud.get_alert_and_ip(alert_id=alert_id, session=session)
+    return JSONResponse(content=result)
+
+
+@app.post("/alerts/{alert_id}/mark-read")
+async def mark_alert_as_read(
+    alert_id: int,
+    session: SessionDep,
+    current_user: str = Depends(get_current_user)
+):
+    await crud.mark_alert_read(alert_id, session)
+    return {"success": True}
+
+
 @app.post("/ipset-calling")
 async def ban_ip(
     session: SessionDep,
@@ -220,6 +251,27 @@ async def ban_ip(
         for ip_obj in ips:
             if ip_obj.ip == ip.ip:
                 ip_obj.status = ip.status
+    return JSONResponse(content=result)
+
+
+@app.get("/alert-stream")
+async def get_alerts(
+    request: Request,
+    session: SessionDep,
+    current_user: str = Depends(get_current_user)
+) -> StreamingResponse:
+    return (StreamingResponse(
+        alert_stream_delivery(request=request),
+        media_type="text/event-stream"
+    ))
+
+
+@app.get("/all-alerts")
+async def all_alerts(
+    session: SessionDep,
+    current_user: str = Depends(get_current_user)
+) -> JSONResponse:
+    result = await crud.get_all_alerts(session=session)
     return JSONResponse(content=result)
 
 
@@ -291,11 +343,11 @@ async def token(response: Response, email: EmailStr, session: SessionDep) -> Res
     return response
 
 
-'''
 # THIS IS FOR SWAGGER TESTING ONLY
 # token: str = Depends(oauth2_scheme) <--- paste directly into endpoint you want to test
 
-@app.post("/token")
+
+'''@app.post("/token")
 async def token(
     session: SessionDep,
     form_data: OAuth2PasswordRequestForm = Depends()

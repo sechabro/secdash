@@ -34,6 +34,7 @@ class CurrentStatus(str, enum.Enum):
     suspended = "suspended"
     banned = "banned"
 
+
 # ------------ BOT LOGIN ATTEMPT-RELATED CLASSES ------------
 
 
@@ -150,3 +151,44 @@ class Token(SQLModel):
 
 class TokenData(SQLModel):
     username: str | None = None
+
+
+# ------------ ALERT-RELATED CLASSES --------------
+
+class AlertStatus(str, enum.Enum):
+    unread = "unread"
+    read = "read"
+
+
+class AlertType(str, enum.Enum):
+    new_ip = "new_ip"
+    autobanned = "autobanned"
+
+
+class AlertForDb(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    alert_type: AlertType = Field(
+        sa_column=Column(SAEnum(AlertType, name="alerttype_enum"))
+    )
+    ip_address: str
+    msg: str
+    date: datetime = Field(
+        sa_column=Column(DateTime(timezone=True))
+    )
+    status: AlertStatus = Field(
+        default=AlertStatus.unread,
+        sa_column=Column(SAEnum(AlertStatus, name="alertstatus_enum"))
+    )
+    ip_id: Optional[int] = Field(
+        default=None, foreign_key="failedloginintel.id")
+    intel: Optional["FailedLoginIntel"] = Relationship()
+
+
+@dataclass(slots=True, order=False)
+class AlertInMem:
+    timestamp: datetime
+    alert_type: AlertType
+    msg: str
+    ip: str
+    alert_id: int | None = None
+    status: AlertStatus | None = None

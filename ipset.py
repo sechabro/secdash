@@ -22,7 +22,7 @@ def ipset_calls(ip: str, action: str | None = "banned") -> dict:
         # ]
         cmd = f_string.split()
         subprocess.run(cmd, check=True)
-
+        # logger.info(f' ipset bypass local testing')
         status_string = f"{action.capitalize()}"
         logger.info(f" {status_string} IP: {ip}")
         return {"status": status_string, "ip": ip}

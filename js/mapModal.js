@@ -56,8 +56,8 @@ export function showCountryModal(countryName, ipData) {
                     "CN": ["CN", "HK", "TW"]
                 };
                 const targetCodes = normalizedCodes[countryCode] || [countryCode];
-                console.log("🔍 Target country codes:", targetCodes);
-                console.log("📦 Current allIpData snapshot:", allIpData);
+                //console.log("🔍 Target country codes:", targetCodes);
+                //console.log("📦 Current allIpData snapshot:", allIpData);
 
                 const updatedData = allIpData.filter(entry => targetCodes.includes(entry.country));
 

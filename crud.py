@@ -1,12 +1,14 @@
 import asyncio
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
+from dataclasses import asdict
 from datetime import datetime, timezone
 
 from fastapi.concurrency import run_in_threadpool
 from pydantic import EmailStr
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 from sqlmodel import select
 
 import schemas
@@ -16,6 +18,8 @@ from services import ip_analysis_gathering, ipabuse_check
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+alerts = deque()
+alerts_queue = asyncio.Queue()
 
 
 async def get_user_by_email(session: AsyncSession, email: EmailStr) -> schemas.UserInDb:
@@ -55,10 +59,6 @@ async def get_all_ips(session: AsyncSession) -> list[schemas.FailedLoginInMem]:
     ]
 
 
-# DRAGON [2025-05-24]: function refactor for only one commit
-# Currently 1 or more commits per session, since it's inside
-# the for-loop. Need to refactor appropriately so that commit
-# only happens once: after all statement executions are done.
 async def upsert_failed_login_attempt(batch: list[list[str]]):
     ip_groups = defaultdict(list)
 
@@ -133,6 +133,11 @@ async def upsert_failed_login_attempt(batch: list[list[str]]):
         logger.error(f' Session Failure: {e}')
 
 
+# DRAGON [2025-05-27]: refactor to call ip_status_update.
+# Instead of performing its own `.where(...).values()` logic inline.
+# Revisit post-MVP deploy.
+
+
 async def ip_status_update(ip: schemas.FailedLoginIPBan, session: AsyncSession):
     try:
         stmt = (
@@ -157,9 +162,24 @@ async def ip_status_update(ip: schemas.FailedLoginIPBan, session: AsyncSession):
         logger.error(f' Session Failure: {e}')
 
 
-# DRAGON [2025-05-27]: refactor to call ip_status_update.
-# Instead of performing its own `.where(...).values()` logic inline.
-# Revisit post-MVP deploy.
+async def alert_stream():
+    if alerts:
+        await alerts_queue.put([asdict(a) for a in alerts])
+        alerts.clear()  # clearing AFTER queueing. at the end of the flow.
+
+
+async def insert_alert_from_mem(session: AsyncSession, alert: schemas.AlertInMem):
+    alert_db = schemas.AlertForDb(
+        alert_type=alert.alert_type,
+        ip_address=alert.ip,
+        msg=alert.msg,
+        date=alert.timestamp,
+        status=schemas.AlertStatus.unread
+    )
+    session.add(alert_db)
+    await session.flush()  # <-- to get access to the assigned id
+    alert.alert_id = alert_db.id
+    alerts.append(alert)
 
 
 async def ai_analysis_update(ip_updates: list[dict]):
@@ -167,33 +187,50 @@ async def ai_analysis_update(ip_updates: list[dict]):
         try:
             successful = 0
             for entry in ip_updates:
-                status = None
-                if entry["recommended_action"] == "autoban":  # <--- autoban automation
-                    await run_in_threadpool(ipset_calls, ip=entry["ip_address"], action="banned")
-                    status = schemas.CurrentStatus.banned
-                stmt = (
-                    update(schemas.FailedLoginIntel)
-                    .where(schemas.FailedLoginIntel.ip_address == entry.get("ip_address"))
-                    .values(
-                        analysis=entry["analysis"],
-                        risk=schemas.RiskLevel(entry["risk_level"]),
-                        action=schemas.ActionType(entry["recommended_action"]),
-                        status_change_date=datetime.now(timezone.utc),
-                        status=status if status else schemas.CurrentStatus.active
+                async with session.begin_nested():
+                    timestamp = datetime.now(timezone.utc)
+                    alert = schemas.AlertInMem(
+                        timestamp=timestamp,
+                        ip=entry["ip_address"],
+                        msg=f"Logged New IP {entry['ip_address']}!",
+                        alert_type=schemas.AlertType.new_ip
                     )
-                )
-                try:
-                    await session.execute(stmt)
-                    logger.info(
-                        f' Analysis for {entry.get("ip_address")} completed. Update successful.'
-                    )
-                    successful += 1
-                except Exception as e:
-                    logger.error(
-                        f' Failed to execute update for {entry.get("ip_address")} {e}')
-                    await session.rollback()
+                    try:
+                        status = None
+                        if entry["recommended_action"] == "autoban":  # <--- autoban automation
+                            # await run_in_threadpool(ipset_calls, ip=entry["ip_address"], action="banned")
+                            print(f" autobanning...\n")
+                            alert.alert_type = schemas.AlertType.autobanned
+                            alert.msg = f"Autobanned New IP {alert.ip}!"
+                            status = schemas.CurrentStatus.banned
+                        stmt = (
+                            update(schemas.FailedLoginIntel)
+                            .where(schemas.FailedLoginIntel.ip_address == entry.get("ip_address"))
+                            .values(
+                                analysis=entry["analysis"],
+                                risk=schemas.RiskLevel(entry["risk_level"]),
+                                action=schemas.ActionType(
+                                    entry["recommended_action"]),
+                                status_change_date=timestamp,
+                                status=status if status else schemas.CurrentStatus.active
+                            )
+                        )
+
+                        await session.execute(stmt)
+                        await insert_alert_from_mem(session=session, alert=alert)
+                        logger.info(
+                            f' {alert.msg} Analysis complete. Update successful.'
+                        )
+                        successful += 1
+                    except Exception as e:
+                        logger.error(
+                            f' Failed to execute update for {entry.get("ip_address")} {e}')
+                        # await session.rollback() <-- not needed with `session.begin_nested()`
             await session.commit()
-            # return {"successful_updates": successful}
+            logger.info(f" {successful} successful updates. Queueing alerts.")
+            await alert_stream()
+            logger.info(f" Alerts queued successfully.")
+
         except Exception as e:
             logger.error(f' Session Failure: {e}')
 
@@ -232,17 +269,84 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
         logger.error(f' 🤮 IP analysis loop crashed: {e}')
 
 
-'''if __name__ == "__main__":
-    bannit = asyncio.run(
-        ai_analysis_update(
-            ip_updates=[
-                {
-                    "recommended_action": "autobanned",
-                    "risk_level": "black",
-                    "analysis": "he's just a bad dude!",
-                    "ip_address": "43.252.230.32"
-                }
-            ]
-        )
+async def get_all_alerts(
+        session: AsyncSession
+) -> list[schemas.AlertInMem]:
+    stmt = select(schemas.AlertForDb).order_by(
+        schemas.AlertForDb.status.asc(),  # unread (0) comes before read (1)
+        schemas.AlertForDb.date.desc()
     )
-    print(bannit)'''
+    results = (await session.execute(stmt)).scalars().all()
+    return [
+        asdict(schemas.AlertInMem(
+            timestamp=result.date.isoformat(),
+            alert_type=result.alert_type.value,
+            msg=result.msg,
+            ip=result.ip_address,
+            alert_id=result.id,
+            status=result.status
+        )) for result in results
+    ]
+
+
+async def get_alert_and_ip(alert_id: int, session: AsyncSession) -> dict:
+    result = await session.execute(
+        select(schemas.AlertForDb)
+        .options(joinedload(schemas.AlertForDb.intel))
+        .where(schemas.AlertForDb.id == alert_id)
+    )
+    alert = result.scalar_one_or_none()
+
+    return {
+        "alert_id": alert.id,
+        "msg": alert.msg,
+        "alert_type": alert.alert_type.value,
+        "ip": alert.ip_address,
+        "ip_id": alert.ip_id,
+        "intel": {
+            "status": alert.intel.status.value,
+            "analysis": alert.intel.analysis,
+            "risk_level": alert.intel.risk.value,
+            "recommended_action": alert.intel.action.value,
+            "country": alert.intel.ipdb.get("countryCode"),
+            "attempt_count": alert.intel.count,
+            "total_reports": alert.intel.ipdb.get("totalReports"),
+            "first_seen": alert.intel.first_seen.isoformat(),
+            "last_seen": alert.intel.last_seen.isoformat()
+
+        } if alert.intel else None
+    }
+
+
+async def mark_alert_read(alert_id: int, session: AsyncSession):
+    result = await session.execute(
+        select(schemas.AlertForDb).where(schemas.AlertForDb.id == alert_id)
+    )
+    alert = result.scalar_one_or_none()
+    if alert and alert.status != schemas.AlertStatus.read:
+        alert.status = schemas.AlertStatus.read
+        await session.commit()
+
+'''if __name__ == "__main__":
+    ip_updates = [
+        {
+            "ip_address": "192.168.1.20",
+            "analysis": "Low risk",
+            "risk_level": "green",
+            "recommended_action": "monitor"
+        },
+        {
+            "ip_address": "192.168.1.404",
+            "analysis": "Invalid IP",
+            "risk_level": "green",
+            "recommended_action": "monito"  # <-- invalid enum value, will fail
+        },
+        {
+            "ip_address": "192.168.1.21",
+            "analysis": "High risk",
+            "risk_level": "black",
+            "recommended_action": "autoban"
+        }
+    ]
+    asyncio.run(ai_analysis_update(ip_updates=ip_updates))
+'''
