@@ -198,8 +198,7 @@ async def ai_analysis_update(ip_updates: list[dict]):
                     try:
                         status = None
                         if entry["recommended_action"] == "autoban":  # <--- autoban automation
-                            # await run_in_threadpool(ipset_calls, ip=entry["ip_address"], action="banned")
-                            print(f" autobanning...\n")
+                            await run_in_threadpool(ipset_calls, ip=entry["ip_address"], action="banned")
                             alert.alert_type = schemas.AlertType.autobanned
                             alert.msg = f"Autobanned New IP {alert.ip}!"
                             status = schemas.CurrentStatus.banned
