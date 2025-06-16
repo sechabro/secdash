@@ -346,6 +346,26 @@ async def ip_stream_delivery():
 
 
 async def alert_stream_delivery(request: Request):
+    yield "data: keepalive\n\n"  # 🔥 send early, keep connection alive
+
+    while True:
+        if await request.is_disconnected():
+            break
+        try:
+            first_batch = await asyncio.wait_for(alerts_queue.get(), timeout=3)
+            full_batch = list(first_batch)
+            for item in full_batch:
+                if isinstance(item.get("timestamp"), datetime):
+                    item["timestamp"] = item["timestamp"].isoformat()
+            logger.info(f' 🔔 Sending {len(full_batch)} new alerts...')
+            yield f"data: {json.dumps(full_batch)}\n\n"
+        except asyncio.TimeoutError:
+            # No data? Keep it alive.
+            yield "data: keepalive\n\n"
+        except asyncio.CancelledError:
+            break
+
+'''async def alert_stream_delivery(request: Request):
     # alerts_queue._queue.clear()
     while True:
         if await request.is_disconnected():
@@ -359,7 +379,7 @@ async def alert_stream_delivery(request: Request):
             logger.info(f' Sending {len(full_batch)} new alerts...')
             yield f"data: {json.dumps(full_batch)}\n\n"
         except asyncio.CancelledError:
-            pass
+            pass'''
 
 
 async def host_info_async() -> dict:
