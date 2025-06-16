@@ -22,11 +22,11 @@ import crud
 import schemas
 from database import create_tables, database_check, get_session
 from ipset import ipset_calls
-from utils import (alert_stream_delivery, established_connections,
-                   host_info_async, io_stream, iostats, ip_stream_delivery,
-                   ip_stream_manager, ips, ips_lock, password_hasher,
-                   password_verify, ps_stream, running_ps, ssh_stream,
-                   stream_delivery)
+from utils import (alert_stream_delivery, alerts_queue,
+                   established_connections, host_info_async, io_stream,
+                   iostats, ip_stream_delivery, ip_stream_manager, ips,
+                   ips_lock, password_hasher, password_verify, ps_stream,
+                   running_ps, ssh_stream, stream_delivery)
 
 load_dotenv()
 
@@ -146,6 +146,7 @@ async def login(request: Request, response: Response,
         url="/dashboard", status_code=303
     )
 
+    alerts_queue._queue.clear()
     # before the redirect, we need to grab our "set-cookie" list from token response. that's where the token lives.
     set_cookie_headers = token_response.headers.getlist("set-cookie")
 
