@@ -241,7 +241,7 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
         logger.info(f' SSH monitoring started')
         while True:
             async with async_session_maker() as session:
-                await asyncio.sleep(3)
+                await asyncio.sleep(120)
                 stmt = select(schemas.FailedLoginIntel).where(
                     (schemas.FailedLoginIntel.analysis == None) |
                     (schemas.FailedLoginIntel.risk == None) |
