@@ -175,7 +175,7 @@ async def insert_alert_from_mem(session: AsyncSession, alert: schemas.AlertInMem
         msg=alert.msg,
         date=alert.timestamp,
         status=schemas.AlertStatus.unread,
-        ip_id=alert.ip_id
+        ip_id=int(alert.ip_id)
     )
     session.add(alert_db)
     await session.flush()  # <-- to get access to the assigned id
