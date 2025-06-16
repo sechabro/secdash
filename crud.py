@@ -248,6 +248,10 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
                 )
                 results = (await session.execute(stmt)).scalars().all()
 
+                if not results:
+                    logger.info(f' Heartbeat. No new IP addresses detected.')
+                    continue
+
                 for_analysis = [
                     schemas.FailedLoginInMem(
                         ip=result.ip_address,
