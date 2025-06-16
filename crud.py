@@ -198,8 +198,7 @@ async def ai_analysis_update(ip_updates: list[dict]):
                     try:
                         status = None
                         if entry["recommended_action"] == "autoban":  # <--- autoban automation
-                            # await run_in_threadpool(ipset_calls, ip=entry["ip_address"], action="banned")
-                            print(f" autobanning...\n")
+                            await run_in_threadpool(ipset_calls, ip=entry["ip_address"], action="banned")
                             alert.alert_type = schemas.AlertType.autobanned
                             alert.msg = f"Autobanned New IP {alert.ip}!"
                             status = schemas.CurrentStatus.banned
@@ -248,10 +247,6 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
                 )
                 results = (await session.execute(stmt)).scalars().all()
 
-                if not results:
-                    logger.info(f' Heartbeat. No new IP addresses detected.')
-                    continue
-
                 for_analysis = [
                     schemas.FailedLoginInMem(
                         ip=result.ip_address,
@@ -265,6 +260,10 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
                     for result in results
                     if result.ipdb is not None
                 ]
+
+                if not for_analysis:
+                    logger.info(f' Heartbeat. No new IP addresses detected.')
+                    continue
 
                 analyzed_ips = await ip_analysis_gathering(ip_info=for_analysis)
                 await ai_analysis_update(ip_updates=analyzed_ips)
