@@ -183,8 +183,7 @@ async def insert_alert_from_mem(session: AsyncSession, alert: schemas.AlertInMem
 
 
 async def ai_analysis_update(ip_updates: list[dict]):
-    logger.info(f' still in analysis update...')
-    '''async with async_session_maker() as session:
+    async with async_session_maker() as session:
         try:
             successful = 0
             for entry in ip_updates:
@@ -233,7 +232,7 @@ async def ai_analysis_update(ip_updates: list[dict]):
             logger.info(f" Alerts queued successfully.")
 
         except Exception as e:
-            logger.error(f' Session Failure: {e}')'''
+            logger.error(f' Session Failure: {e}')
 
 
 async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
