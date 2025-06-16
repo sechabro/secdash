@@ -194,8 +194,9 @@ async def test_io_stream():
 
 @pytest.mark.asyncio
 async def test_alert_stream():
+    # Set up a mock request that stays connected, then disconnects after 2 cycles
     mock_request = AsyncMock()
-    mock_request.is_disconnected = AsyncMock(side_effect=[False, True])
+    mock_request.is_disconnected = AsyncMock(side_effect=[False, False, True])
 
     mock_alert = {
         "ip": "167.172.31.209",
@@ -207,24 +208,26 @@ async def test_alert_stream():
 
     results = []
 
-    # mocking a run to satisfy `alerts_queue._queue.clear()` at the top #
     async def consume_alerts():
         gen = alert_stream_delivery(mock_request)
         async for msg in gen:
             results.append(msg)
-            break
+            if len(results) == 2:
+                break
+
     task = asyncio.create_task(consume_alerts())
-    # Let the generator initialize and start waiting
-    await asyncio.sleep(0.1)
-    # Now feed the alert in
-    await alerts_queue.put([mock_alert])
+    await asyncio.sleep(0.1)  # Allow generator to yield keepalive
+    await alerts_queue.put([mock_alert])  # Feed alert into the queue
 
-    # Wait for the task to complete
-    await asyncio.wait_for(task, timeout=1.0)
+    await asyncio.wait_for(task, timeout=2.0)
 
-    assert len(results) == 1
-    assert results[0].startswith("data: ")
-    payload = json.loads(results[0][6:].strip())
+    # Assertions
+    assert len(results) == 2
+    assert results[0].strip() == "data: keepalive"
+
+    assert results[1].startswith("data: ")
+    payload = json.loads(results[1][6:].strip())
+    assert isinstance(payload, list)
     assert payload[0]["ip"] == "167.172.31.209"
 
 
