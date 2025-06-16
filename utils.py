@@ -14,8 +14,9 @@ import psutil
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
 from fastapi.concurrency import run_in_threadpool
+from h11 import Request
 
-from crud import get_all_ips, upsert_failed_login_attempt
+from crud import alerts_queue, get_all_ips, upsert_failed_login_attempt
 from database import async_session_maker
 from schemas import IoStatLineInMem
 
@@ -175,7 +176,7 @@ def paginate(page: int, limit: int, snapshot: list) -> tuple:
     return (new_snapshot, total_items)
 
 
-def group_by_keys(items: list, outer_key: str, inner_key: str) -> list:
+def group_by_keys(items: list[dict], outer_key: str, inner_key: str) -> list:
     return_dict = {}
     for item in items:
         group = item.get(outer_key)
@@ -336,6 +337,28 @@ async def ip_stream_delivery():
             yield f"data: {json.dumps({'ips': new_snapshot, 'country_counts': counts_snapshot})}\n\n"
             old_snapshot = new_snapshot
         else:
+            pass
+
+# DRAGON [2025-06-13]: Directly clearing `alerts_queue._queue`.
+# This bypasses the normal `get()` flow and should ONLY be used
+# when we are certain that no other coroutines are reading/writing
+# concurrently.
+
+
+async def alert_stream_delivery(request: Request):
+    alerts_queue._queue.clear()
+    while True:
+        if await request.is_disconnected():
+            break
+        try:
+            first_batch = await alerts_queue.get()
+            full_batch = list(first_batch)
+            for item in full_batch:
+                if isinstance(item.get("timestamp"), datetime):
+                    item["timestamp"] = item["timestamp"].isoformat()
+            logger.info(f' Sending {len(full_batch)} new alerts...')
+            yield f"data: {json.dumps(full_batch)}\n\n"
+        except asyncio.CancelledError:
             pass
 
 

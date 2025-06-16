@@ -16,15 +16,19 @@
         </div>
         <div class="sidebar-content">
             <p>Hi, {{ user }}</p>
-            <!--<a href="#" id="live-dashboard">Live Dashboard</a>
-            <a href="#" id="nav-cases">Cases</a>-->
+            <a href="#" id="live-dashboard">Live Dashboard</a>
+            <a href="#" id="message-center-sidebar">Message Center</a>
             <form action="/logout" method="get">
                 <button type="submit">Logout</button>
             </form>
         </div>
     </div>
-    <!-- CASE LOAD VIEW -->
-
+    <!-- MESSAGE CENTER VIEW -->
+    <div id="message-center" class="hidden main-content">
+        <h2>📬 Message Center</h2>
+        <p>This is the message center.</p>
+        <!-- Later: dynamically insert alert detail content here -->
+    </div>
     <!-- LIVE DASHBOARD VIEW -->
     <div id="main-content" class="main-content">
         <div class="tabs">
@@ -109,7 +113,10 @@
                 <button id="case-action-button" class="case-button"></button>
             </div>
         </div>-->
+
     </div>
+
+    <div id="toast-container"></div>
     <script src="/js/bundle.js"></script>
 </body>
 

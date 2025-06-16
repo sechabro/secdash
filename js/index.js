@@ -1,3 +1,4 @@
+import { startAlertStream } from './alertStreamHandler.js';
 import { fetchConnectionsData } from "./fetchConnectionsData.js";
 import { fetchHostStatus } from "./fetchHostStatus.js";
 import { startIPDataStream } from "./fetchIPS.js";
@@ -15,8 +16,7 @@ export {
     fetchHostStatus,
     initializeUIHandlers,
     renderGroupedProcesses,
-    runWhenReady,
-    startIostatStream,
+    runWhenReady, startAlertStream, startIostatStream,
     startIPDataStream,
     startProcessStream
 };
@@ -34,6 +34,7 @@ window.runWhenReady = runWhenReady;
 
 // ✅ Autostart the dashboard UI
 initializeUIHandlers();
+startAlertStream();
 //initVisitorPagination();
 //casesViewSwitch();
 //liveDashboardSwitch();

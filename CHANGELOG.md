@@ -132,7 +132,7 @@
 ### Changed:
 - Moved `ip_to_blacklist()` from `utils.py` to a new `ipset.py` to avoid a circular import trap. Function has also been renamed to `ipset_calls()` as it handles both blacklisting and whitelisting functionality.
 
-## [version 1.0.0] - 2025-05.31
+## [version 1.0.0] - 2025.05.31
 ### Added:
 - Mounted a `styles` folder and created `dashboard.css` inside.
 - Created a `countryMapping.js` to contain references of country codes and their respective country names.
@@ -158,3 +158,9 @@
 
 ### Fixed:
 - In `ip_status_update`, changed incorrect `current_status` column name to correct `status` naming convention, to match FailedLoginIntel schema.
+
+
+## [version 1.0.1] - 2025.06.16
+### Added:
+- Introduced SSE-based in-app alert delivery for live security notifications at `/alert-stream`. Includes AI-driven risk analysis alerts, autoban actions. Notified via toast alerts, with expandable content in message center.
+- Integrated Alembic for ease of db-related schema updates.

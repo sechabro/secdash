@@ -1,4 +1,5 @@
 import { getMapChart } from './mapEChart.js';
+import { renderAllAlerts } from './renderAllAlerts.js';
 
 export function initializeUIHandlers() {
     // TAB SWITCHING HANDLER
@@ -39,24 +40,25 @@ export function initializeUIHandlers() {
     window.runWhenReady(() => window.startIPDataStream())
     // show visitors tab by default:
     showTab('ip-panel-section');
+    messageCenterSwitch();
+    liveDashboardSwitch();
 }
 
-//export async function casesViewSwitch() {
-//    document.getElementById("nav-cases").addEventListener("click", async (e) => {
-//        e.preventDefault();
-//
-//        document.getElementById("main-content").classList.add("hidden");
-//        document.getElementById("cases-view").classList.remove("hidden");
-//
-//        await fetchCaseLoad(); //<-- this is async btw.
-//    });
-//}
+export function messageCenterSwitch() {
+    document.getElementById("message-center-sidebar").addEventListener("click", (e) => {
+        e.preventDefault();
 
-//export function liveDashboardSwitch() {
-//    document.getElementById("live-dashboard").addEventListener("click", (e) => {
-//        e.preventDefault();
-//
-//        document.getElementById("cases-view").classList.add("hidden");
-//        document.getElementById("main-content").classList.remove("hidden");
-//    });
-//}
+        document.getElementById("main-content").classList.add("hidden");
+        document.getElementById("message-center").classList.remove("hidden");
+        renderAllAlerts();
+    });
+}
+
+export function liveDashboardSwitch() {
+    document.getElementById("live-dashboard").addEventListener("click", (e) => {
+        e.preventDefault();
+
+        document.getElementById("message-center").classList.add("hidden");
+        document.getElementById("main-content").classList.remove("hidden");
+    });
+}
