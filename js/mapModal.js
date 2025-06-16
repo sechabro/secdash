@@ -12,7 +12,7 @@ export function showCountryModal(countryName, ipData) {
     title.textContent = countryName;
     tableBody.innerHTML = "";
 
-    const skipKeys = new Set(["country", "first_seen", "last_seen"]);
+    const skipKeys = new Set(["country", "first_seen", "last_seen", "ip_id"]);
     ipData.forEach(ip => {
         const tr = document.createElement("tr");
 
