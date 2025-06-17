@@ -90,14 +90,9 @@ async def on_startup():
     app.state.ips_task = asyncio.create_task(
         crud.get_unanalyzed_ips()
     )
-
     app.state.ips_stream_task = asyncio.create_task(
         ip_stream_manager()
     )
-    ##### LOCAL DEVELOPMENT USE ONLY #####
-    # app.state.fake_ips_task = asyncio.create_task(
-    #    fake_alerts.fake_alert_stream()
-    # )
     logger.info(f' System metrics streaming started...')
 
 
@@ -157,8 +152,6 @@ async def login(request: Request, response: Response,
     # after, we can safely return the redirect response.
     return redirect_response
 
-#### CHANGE SECURE ARG TO TRUE!!! ####
-
 
 @app.get("/logout")
 def logout():
@@ -166,7 +159,7 @@ def logout():
     response.delete_cookie(
         key="access_token",
         httponly=True,
-        secure=False,  # <- change to True before pushing to production
+        secure=True,  # <- change to True before pushing to production
         samesite="strict"
     )
     return response
@@ -315,7 +308,7 @@ async def process_stream(current_user: str = Depends(get_current_user)) -> Strea
 # it’s still one of the flows outlined in the OAuth2 specification. But it's my server that crafts
 # and grants the authorization token.
 
-EXPIRE_MINUTES = 30
+EXPIRE_MINUTES = 60
 ALGORITHM = "HS256"
 SECRET_KEY = os.getenv('SECD', default=None)
 

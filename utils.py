@@ -352,12 +352,13 @@ async def alert_stream_delivery(request: Request):
         if await request.is_disconnected():
             break
         try:
-            first_batch = await asyncio.wait_for(alerts_queue.get(), timeout=3)
+            first_batch = await asyncio.wait_for(alerts_queue.get(), timeout=10)
             full_batch = list(first_batch)
             for item in full_batch:
                 if isinstance(item.get("timestamp"), datetime):
                     item["timestamp"] = item["timestamp"].isoformat()
-            logger.info(f' 🔔 Sending {len(full_batch)} new alerts...')
+            logger.info(
+                f" 🚧 Yielding {len(full_batch)} new alerts:\n{json.dumps(full_batch, indent=2)}")
             yield f"data: {json.dumps(full_batch)}\n\n"
         except asyncio.TimeoutError:
             # No data? Keep it alive.
@@ -386,7 +387,7 @@ async def host_info_async() -> dict:
     def host_info():
         uptime = time.time() - psutil.boot_time()
         return {
-            "cpu_percent": psutil.cpu_percent(interval=1),
+            "cpu_percent": psutil.cpu_percent(interval=0.1),
             "memory_percent": psutil.virtual_memory().percent,
             "disk_percent": psutil.disk_usage('/').percent,
             "uptime_seconds": int(uptime),
