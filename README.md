@@ -233,7 +233,8 @@ WantedBy=multi-user.target
 ```
 
 - Finally, run the following commands:
-```systemctl daemon-reexec
+```
+systemctl daemon-reexec
 systemctl daemon-reload
 systemctl enable secdash
 systemctl start secdash
