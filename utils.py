@@ -16,7 +16,7 @@ from argon2.exceptions import VerificationError
 from fastapi.concurrency import run_in_threadpool
 from h11 import Request
 
-from crud import alerts_queue, get_all_ips, upsert_failed_login_attempt
+from crud import alerts, get_all_ips, upsert_failed_login_attempt
 from database import async_session_maker
 from schemas import IoStatLineInMem
 
@@ -33,22 +33,7 @@ country_counts = deque()
 ps_lock = threading.Lock()
 ssh_lock = threading.Lock()
 ips_lock = threading.Lock()
-
-'''
-####### SITE USER MONITORING FUTURE USE #############
-async def locale_formatting(client_ip: str) -> str:
-    geo_info = db_reader.city(client_ip) # <-- need to install geoip2
-    locale_parts = ["city.name",
-                    "subdivisions.most_specific.name", "country.name"]
-    locale_info = []
-    async for part in locale_parts:
-        try:
-            info = reduce(getattr, part.split("."), geo_info)
-            locale_info.append(info)
-        except AttributeError:
-            locale_info.append("not found")
-    return ", ".join(locale_info)
-'''
+alerts_lock = threading.Lock()
 
 
 def established_connections():
@@ -346,6 +331,36 @@ async def ip_stream_delivery():
 
 
 async def alert_stream_delivery(request: Request):
+    logger.info("Alert stream starting...")
+    yield "data: keepalive\n\n"
+    old_snapshot = []
+
+    while True:
+        if await request.is_disconnected():
+            logger.info("🔌 Client disconnected from alert stream.")
+            break
+
+        await asyncio.sleep(10)  # avoid CPU churn
+
+        new_snapshot = [asdict(a) for a in alerts]
+
+        # Optional: convert timestamps to ISO string for frontend
+        for alert in new_snapshot:
+            if isinstance(alert.get("timestamp"), datetime):
+                alert["timestamp"] = alert["timestamp"].isoformat()
+
+        if new_snapshot != old_snapshot:
+            logger.info(
+                f"🚧 Yielding {len(new_snapshot)} new alerts:\n{json.dumps(new_snapshot, indent=2)}")
+            yield f"data: {json.dumps(new_snapshot)}\n\n"
+
+            with alerts_lock:
+                alerts.clear()
+            old_snapshot = new_snapshot
+        else:
+            yield "data: keepalive\n\n"
+
+'''async def alert_stream_delivery(request: Request):
     yield "data: keepalive\n\n"  # 🔥 send early, keep connection alive
 
     while True:
@@ -364,23 +379,7 @@ async def alert_stream_delivery(request: Request):
             # No data? Keep it alive.
             yield "data: keepalive\n\n"
         except asyncio.CancelledError:
-            break
-
-'''async def alert_stream_delivery(request: Request):
-    # alerts_queue._queue.clear()
-    while True:
-        if await request.is_disconnected():
-            break
-        try:
-            first_batch = await alerts_queue.get()
-            full_batch = list(first_batch)
-            for item in full_batch:
-                if isinstance(item.get("timestamp"), datetime):
-                    item["timestamp"] = item["timestamp"].isoformat()
-            logger.info(f' Sending {len(full_batch)} new alerts...')
-            yield f"data: {json.dumps(full_batch)}\n\n"
-        except asyncio.CancelledError:
-            pass'''
+            break'''
 
 
 async def host_info_async() -> dict:

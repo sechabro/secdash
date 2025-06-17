@@ -19,7 +19,7 @@ from services import ip_analysis_gathering, ipabuse_check
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 alerts = deque()
-alerts_queue = asyncio.Queue()
+# alerts_queue = asyncio.Queue()
 
 
 async def get_user_by_email(session: AsyncSession, email: EmailStr) -> schemas.UserInDb:
@@ -162,10 +162,11 @@ async def ip_status_update(ip: schemas.FailedLoginIPBan, session: AsyncSession):
         logger.error(f' Session Failure: {e}')
 
 
-async def alert_stream():
+'''async def alert_stream():
     if alerts:
         await alerts_queue.put([asdict(a) for a in alerts])
         alerts.clear()  # clearing AFTER queueing. at the end of the flow.
+'''
 
 
 async def insert_alert_from_mem(session: AsyncSession, alert: schemas.AlertInMem):
@@ -229,8 +230,8 @@ async def ai_analysis_update(ip_updates: list[dict]):
                         # await session.rollback() <-- not needed with `session.begin_nested()`
             await session.commit()
             logger.info(f" {successful} successful updates. Queueing alerts.")
-            await alert_stream()
-            logger.info(f" Alerts queued successfully.")
+            # await alert_stream()
+            logger.info(f" Alerts dequed successfully.")
 
         except Exception as e:
             logger.error(f' Session Failure: {e}')
