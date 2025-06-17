@@ -8,6 +8,7 @@ export function startAlertStream() {
     eventSource.onmessage = (event) => {
         if (event.data === "keepalive") {
             // keep the stream connected, but do nothing
+            console.log("keepalive notification")
             return;
         }
 
