@@ -18,7 +18,7 @@
             <p>Hi, {{ user }}</p>
             <a href="#" id="live-dashboard">Live Dashboard</a>
             <a href="#" id="message-center-sidebar">Message Center</a>
-            <form action="/logout" method="get">
+            <form action="/logout" method="get" onsubmit="window.closeAllStreams()">
                 <button type="submit">Logout</button>
             </form>
         </div>

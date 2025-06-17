@@ -5,4 +5,6 @@ export function startProcessStream() {
         const data = JSON.parse(event.data);
         window.renderGroupedProcesses(data);
     };
+
+    return evtSource;
 }

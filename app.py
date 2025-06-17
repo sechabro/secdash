@@ -326,7 +326,7 @@ async def token(response: Response, email: EmailStr, session: SessionDep) -> Res
         value=access_token,
         httponly=True,
         samesite="strict",
-        secure=False,  # change to True before heading to production!
+        secure=True,  # change to True before heading to production!
         max_age=access_token_expires.total_seconds()
     )
 

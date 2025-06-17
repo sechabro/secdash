@@ -24,17 +24,24 @@ export {
 window.fetchHostStatus = fetchHostStatus;
 window.fetchConnectionsData = fetchConnectionsData;
 window.renderGroupedProcesses = renderGroupedProcesses;
-//window.renderVisitors = renderVisitors;
 window.startIostatStream = startIostatStream;
 window.startProcessStream = startProcessStream;
-//window.startVisitorStream = startVisitorStream;
 window.startIPDataStream = startIPDataStream;
-//window.connectVisitorStream = connectVisitorStream;
+window.startAlertStream = startAlertStream;
 window.runWhenReady = runWhenReady;
+
+
+window.closeAllStreams = function () {
+    if (window.alertStream) window.alertStream.close();
+    if (window.iostatStream) window.iostatStream.close();
+    if (window.processStream) window.processStream.close();
+    if (window.ipStream) window.ipStream.close();
+    console.log("Streams closed");
+};
 
 // ✅ Autostart the dashboard UI
 initializeUIHandlers();
-startAlertStream();
+//startAlertStream();
 //initVisitorPagination();
 //casesViewSwitch();
 //liveDashboardSwitch();
