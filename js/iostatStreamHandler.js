@@ -21,4 +21,6 @@ export function startIostatStream() {
 
         cpuChart.update();
     };
+
+    return iostatEventSource;
 }

@@ -34,10 +34,11 @@ export function initializeUIHandlers() {
     });
 
     // SSE STREAMS AND START TRIGGERS
-    window.runWhenReady(() => window.startIostatStream());
-    window.runWhenReady(() => window.startProcessStream());
-    ///window.runWhenReady(() => window.startVisitorStream());
-    window.runWhenReady(() => window.startIPDataStream())
+    window.runWhenReady(() => { window.alertStream = startAlertStream(); });
+    window.runWhenReady(() => { window.iostatStream = startIostatStream(); });
+    window.runWhenReady(() => { window.processStream = startProcessStream(); });
+    window.runWhenReady(() => { window.ipStream = startIPDataStream(); });
+
     // show visitors tab by default:
     showTab('ip-panel-section');
     messageCenterSwitch();

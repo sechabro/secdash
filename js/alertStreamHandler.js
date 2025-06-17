@@ -3,9 +3,9 @@ import { showToast } from './toastManager.js';
 export function startAlertStream() {
     console.log("Alert stream initialized");
 
-    const eventSource = new EventSource('/alert-stream');
+    const alertSource = new EventSource('/alert-stream');
 
-    eventSource.onmessage = (event) => {
+    alertSource.onmessage = (event) => {
         if (event.data === "keepalive") {
             // keep the stream connected, but do nothing
             console.log("keepalive notification")
@@ -25,8 +25,10 @@ export function startAlertStream() {
         }
     };
 
-    eventSource.onerror = (err) => {
+    alertSource.onerror = (err) => {
         console.error("⚠️ Alert stream error:", err);
-        eventSource.close(); // Optional: close on error, or attempt reconnect
+        alertSource.close(); // Optional: close on error, or attempt reconnect
     };
+
+    return alertSource;
 }

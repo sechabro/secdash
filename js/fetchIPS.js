@@ -16,6 +16,8 @@ export function startIPDataStream() {
         console.error(`IP Stream Error:`, err)
         ipEventSource.close()
     };
+
+    return ipEventSource;
 }
 
 //export function waitForNextIPStreamUpdate(callback) {
