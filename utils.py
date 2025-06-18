@@ -332,6 +332,10 @@ async def ip_stream_delivery():
 
 async def alert_stream_delivery(request: Request):
     logger.info("Alert stream starting...")
+
+    with alerts_lock:
+        alerts.clear()
+
     yield "data: keepalive\n\n"
     old_snapshot = []
 
@@ -342,20 +346,19 @@ async def alert_stream_delivery(request: Request):
 
         await asyncio.sleep(10)  # avoid CPU churn
 
-        new_snapshot = [asdict(a) for a in alerts]
+        with alerts_lock:
+            new_snapshot = [asdict(a) for a in alerts]
+            alerts.clear()
 
-        # Optional: convert timestamps to ISO string for frontend
         for alert in new_snapshot:
             if isinstance(alert.get("timestamp"), datetime):
                 alert["timestamp"] = alert["timestamp"].isoformat()
 
-        if new_snapshot != old_snapshot:
+        if new_snapshot and new_snapshot != old_snapshot:
             logger.info(
                 f"🚧 Yielding {len(new_snapshot)} new alerts:\n{json.dumps(new_snapshot, indent=2)}")
             yield f"data: {json.dumps(new_snapshot)}\n\n"
 
-            with alerts_lock:
-                alerts.clear()
             old_snapshot = new_snapshot
         else:
             yield "data: keepalive\n\n"
