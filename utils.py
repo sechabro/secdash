@@ -85,11 +85,11 @@ def get_field_value(item: Any, field: str):
     return None
 
 
-def serialize(item: Any):
-    """Universal serializer for dicts and dataclasses."""
-    if is_dataclass(item):
-        return asdict(item)
-    return item  # assuming it's already a dict
+# def serialize(item: Any):
+#    """Universal serializer for dicts and dataclasses."""
+#    if is_dataclass(item):
+#        return asdict(item)
+#    return item  # assuming it's already a dict
 
 # DRAGON [2025-05-27]: stream_delivery() has mutated into an
 # overloaded multi-purpose stream processor responsible for sorting,
@@ -163,17 +163,32 @@ def paginate(page: int, limit: int, snapshot: list) -> tuple:
     return (new_snapshot, total_items)
 
 
-def group_by_keys(items: list[dict], outer_key: str, inner_key: str) -> list:
-    return_dict = {}
-    for item in items:
-        group = item.get(outer_key)
-        group_value = item.get(inner_key)
-        if not return_dict.get(group):
-            return_dict.update({group: {}})
-        if not return_dict[group].get(group_value):
-            return_dict[group][group_value] = []
-        return_dict[group][group_value].append(item)
-    return [{group: data} for group, data in return_dict.items()]
+def group_by_keys(outer_key: str, inner_key: str):
+    def grouped_items(items: list[dict]) -> list:
+        return_dict = {}
+        for item in items:
+            group = item.get(outer_key)
+            group_value = item.get(inner_key)
+            if not return_dict.get(group):
+                return_dict[group] = {}
+            if not return_dict[group].get(group_value):
+                return_dict[group][group_value] = []
+            return_dict[group][group_value].append(item)
+        return [{group: data} for group, data in return_dict.items()]
+    return grouped_items
+
+
+# def group_by_keys(items: list[dict], outer_key: str, inner_key: str) -> list:
+#    return_dict = {}
+#    for item in items:
+#        group = item.get(outer_key)
+#        group_value = item.get(inner_key)
+#        if not return_dict.get(group):
+#            return_dict.update({group: {}})
+#        if not return_dict[group].get(group_value):
+#            return_dict[group][group_value] = []
+#        return_dict[group][group_value].append(item)
+#    return [{group: data} for group, data in return_dict.items()]
 
 
 ###############################################################################
@@ -182,9 +197,8 @@ def group_by_keys(items: list[dict], outer_key: str, inner_key: str) -> list:
 ####################### STREAM ################################################
 
 
-async def ps_stream(script: str | None = None):
-    global running_ps
-    processes = await run_script(script=script)
+async def ps_stream(ps_manager: StreamManager):
+    processes = await ps_manager.run_script()
 
     try:
         logger.info(f' Process stream starting.')
@@ -193,22 +207,24 @@ async def ps_stream(script: str | None = None):
             line_strip = line.decode().strip()
             if line_strip == "END":
                 if ps_deque_swap:
-                    with ps_lock:
-                        running_ps.clear()
-                        running_ps.extend(ps_deque_swap)
+                    # logger.info(
+                    #    f"⏱️ Process lines parsed: {len(ps_deque_swap)}")
+                    with ps_manager.lock:
+                        ps_manager.deque.clear()
+                        ps_manager.deque.extend(ps_deque_swap)
                     ps_deque_swap.clear()
             else:
                 columns = ["timestamp", "pid", "ppid", "user",
                            "cpu_pct", "stat", "start", "time", "command"]
                 fields = line.decode().strip().split(",")
 
-                # pad fields to full length if command value is missing
+                # pad fields to full length if command value is missing from line
                 fields += ["n/a"] * (len(columns) - len(fields))
                 ps_deque_swap.append(dict(zip(columns, fields)))
 
     except Exception as e:
         logger.info(f' EXCEPTION: {e}')
-        processes.terminate()
+        # processes.terminate()
 
 ################################################################
 #### IOSTAT ####################################################

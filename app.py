@@ -25,10 +25,10 @@ from database import create_tables, database_check, get_session
 from ipset import ipset_calls
 from stream_manager import StreamManager
 from utils import (alert_stream_delivery, alerts, established_connections,
-                   host_info_async, io_stream, iostats, ip_stream_delivery,
-                   ip_stream_manager, ips, ips_lock, password_hasher,
-                   password_verify, ps_stream, running_ps, ssh_stream,
-                   stream_delivery)
+                   group_by_keys, host_info_async, io_stream, iostats,
+                   ip_stream_delivery, ip_stream_manager, ips, ips_lock,
+                   password_hasher, password_verify, ps_stream, running_ps,
+                   ssh_stream, stream_delivery)
 
 load_dotenv()
 
@@ -79,6 +79,14 @@ iostream_manager = StreamManager(
     deque=deque(maxlen=30)
 )
 
+ps_stream_manager = StreamManager(
+    data_fn=ps_stream,
+    group_fn=group_by_keys(outer_key="user", inner_key="ppid"),
+    script="./scripts/ps_logger.sh",
+    deque=deque()
+
+)
+
 
 @app.on_event("startup")
 async def on_startup():
@@ -95,7 +103,8 @@ async def on_startup():
         )
     )
     app.state.ps_task = asyncio.create_task(
-        ps_stream(script="./scripts/ps_logger.sh"))
+        ps_stream(ps_manager=ps_stream_manager)
+    )
     app.state.ssh_task = asyncio.create_task(
         ssh_stream(script="./scripts/vps_login_monitor.sh")
     )
@@ -301,13 +310,13 @@ async def iostat_stream(
 
 
 @app.get("/process-stream")
-async def process_stream(current_user: str = Depends(get_current_user)) -> StreamingResponse:
+async def process_stream(
+    request: Request,
+    current_user: str = Depends(get_current_user)
+) -> StreamingResponse:
     return StreamingResponse(
-        stream_delivery(
-            data_stream=running_ps,
-            group=True,
-            outer_key="user",
-            inner_key="ppid"
+        ps_stream_manager.deque_delivery(
+            request=request,
         ),
         media_type="text/event-stream"
     )
