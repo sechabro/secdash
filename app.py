@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
@@ -22,6 +23,7 @@ import crud
 import schemas
 from database import create_tables, database_check, get_session
 from ipset import ipset_calls
+from stream_manager import StreamManager
 from utils import (alert_stream_delivery, alerts, established_connections,
                    host_info_async, io_stream, iostats, ip_stream_delivery,
                    ip_stream_manager, ips, ips_lock, password_hasher,
@@ -71,6 +73,12 @@ async def get_current_user(access_token: str = Cookie(None)):
             f' \n\nInvalidTokenError exception raised for some reason...\n\n')
         raise credentials_exception
 
+iostream_manager = StreamManager(
+    data_fn=io_stream,
+    script="./scripts/iostat_logger.sh",
+    deque=deque(maxlen=30)
+)
+
 
 @app.on_event("startup")
 async def on_startup():
@@ -80,8 +88,12 @@ async def on_startup():
         logger.info(f' Database already exists... Checking tables...')
     if await create_tables():
         logger.info(f' Table check successful.')
+
     app.state.iostat_task = asyncio.create_task(
-        io_stream(script="./scripts/iostat_logger.sh"))
+        io_stream(
+            iostat_manager=iostream_manager
+        )
+    )
     app.state.ps_task = asyncio.create_task(
         ps_stream(script="./scripts/ps_logger.sh"))
     app.state.ssh_task = asyncio.create_task(
@@ -278,9 +290,12 @@ async def get_ips(
 
 
 @app.get("/iostat-stream")
-async def iostat_stream(current_user: str = Depends(get_current_user)) -> StreamingResponse:
+async def iostat_stream(
+    request: Request,
+    current_user: str = Depends(get_current_user)
+) -> StreamingResponse:
     return StreamingResponse(
-        stream_delivery(data_stream=iostats),
+        iostream_manager.deque_delivery(request=request),
         media_type="text/event-stream"
     )
 

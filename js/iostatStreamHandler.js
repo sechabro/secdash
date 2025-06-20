@@ -2,6 +2,8 @@ export function startIostatStream() {
     const iostatEventSource = new EventSource("/iostat-stream");
 
     iostatEventSource.onmessage = function (event) {
+        if (event.data === "keepalive") return;
+
         const readings = JSON.parse(event.data);
         if (!window.cpuChart) return;
 

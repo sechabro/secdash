@@ -19,6 +19,7 @@ from h11 import Request
 from crud import alerts, get_all_ips, upsert_failed_login_attempt
 from database import async_session_maker
 from schemas import IoStatLineInMem
+from stream_manager import StreamManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ psh = PasswordHasher()
 
 # Datastreams deque & lock
 iostats = deque(maxlen=30)
+
 running_ps = deque()
 ssh_lines = deque(maxlen=20)
 ips = deque()
@@ -214,14 +216,14 @@ async def ps_stream(script: str | None = None):
 ############### STREAM #########################################
 
 
-async def io_stream(script: str | None = None):
-    iostat_data = await run_script(script=script)
+async def io_stream(iostat_manager: StreamManager):
+    iostat_data = await iostat_manager.run_script()
     try:
         logger.info(f' Iostat stream starting.')
         async for line in iostat_data.stdout:
             (date, time, user, nice, sys, iowait, steal,
              idle) = line.decode().strip().split(",")
-            iostats.append(
+            iostat_manager.deque.append(
                 IoStatLineInMem(
                     date=date,
                     time=time,
@@ -235,7 +237,7 @@ async def io_stream(script: str | None = None):
             )
     except Exception as e:
         logger.error(f' EXCEPTION: {e}')
-        iostat_data.terminate()
+        # iostat_data.terminate()
 
 ################################################################
 ##### FAILED ###################################################
