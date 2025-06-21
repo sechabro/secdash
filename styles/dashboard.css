@@ -878,7 +878,7 @@
         }
 
         .alert-dropdown.show .alert-detail-box {
-            max-height: 300px;
+            max-height: 400px;
             /* adjust as needed */
             opacity: 1;
             padding: 1rem;

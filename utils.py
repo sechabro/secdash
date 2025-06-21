@@ -26,16 +26,11 @@ logger = logging.getLogger(__name__)
 psh = PasswordHasher()
 
 # Datastreams deque & lock
-iostats = deque(maxlen=30)
-
-running_ps = deque()
 ssh_lines = deque(maxlen=20)
 ips = deque()
 country_counts = deque()
-ps_lock = threading.Lock()
 ssh_lock = threading.Lock()
 ips_lock = threading.Lock()
-alerts_lock = threading.Lock()
 
 
 def established_connections():
@@ -83,13 +78,6 @@ def get_field_value(item: Any, field: str):
     elif is_dataclass(item):
         return getattr(item, field, None)
     return None
-
-
-# def serialize(item: Any):
-#    """Universal serializer for dicts and dataclasses."""
-#    if is_dataclass(item):
-#        return asdict(item)
-#    return item  # assuming it's already a dict
 
 # DRAGON [2025-05-27]: stream_delivery() has mutated into an
 # overloaded multi-purpose stream processor responsible for sorting,
@@ -163,6 +151,8 @@ def paginate(page: int, limit: int, snapshot: list) -> tuple:
     return (new_snapshot, total_items)
 
 
+# closure implementation to allow for partial
+# arg construction on instantiation
 def group_by_keys(outer_key: str, inner_key: str):
     def grouped_items(items: list[dict]) -> list:
         return_dict = {}
@@ -176,19 +166,6 @@ def group_by_keys(outer_key: str, inner_key: str):
             return_dict[group][group_value].append(item)
         return [{group: data} for group, data in return_dict.items()]
     return grouped_items
-
-
-# def group_by_keys(items: list[dict], outer_key: str, inner_key: str) -> list:
-#    return_dict = {}
-#    for item in items:
-#        group = item.get(outer_key)
-#        group_value = item.get(inner_key)
-#        if not return_dict.get(group):
-#            return_dict.update({group: {}})
-#        if not return_dict[group].get(group_value):
-#            return_dict[group][group_value] = []
-#        return_dict[group][group_value].append(item)
-#    return [{group: data} for group, data in return_dict.items()]
 
 
 ###############################################################################
@@ -341,66 +318,6 @@ async def ip_stream_delivery():
             old_snapshot = new_snapshot
         else:
             pass
-
-# DRAGON [2025-06-13]: Directly clearing `alerts_queue._queue`.
-# This bypasses the normal `get()` flow and should ONLY be used
-# when we are certain that no other coroutines are reading/writing
-# concurrently.
-
-
-async def alert_stream_delivery(request: Request):
-    logger.info("Alert stream starting...")
-
-    with alerts_lock:
-        alerts.clear()
-
-    yield "data: keepalive\n\n"
-    old_snapshot = []
-
-    while True:
-        if await request.is_disconnected():
-            logger.info("🔌 Client disconnected from alert stream.")
-            break
-
-        await asyncio.sleep(10)  # avoid CPU churn
-
-        with alerts_lock:
-            new_snapshot = [asdict(a) for a in alerts]
-            alerts.clear()
-
-        for alert in new_snapshot:
-            if isinstance(alert.get("timestamp"), datetime):
-                alert["timestamp"] = alert["timestamp"].isoformat()
-
-        if new_snapshot and new_snapshot != old_snapshot:
-            logger.info(
-                f"🚧 Yielding {len(new_snapshot)} new alerts:\n{json.dumps(new_snapshot, indent=2)}")
-            yield f"data: {json.dumps(new_snapshot)}\n\n"
-
-            old_snapshot = new_snapshot
-        else:
-            yield "data: keepalive\n\n"
-
-'''async def alert_stream_delivery(request: Request):
-    yield "data: keepalive\n\n"  # 🔥 send early, keep connection alive
-
-    while True:
-        if await request.is_disconnected():
-            break
-        try:
-            first_batch = await asyncio.wait_for(alerts_queue.get(), timeout=10)
-            full_batch = list(first_batch)
-            for item in full_batch:
-                if isinstance(item.get("timestamp"), datetime):
-                    item["timestamp"] = item["timestamp"].isoformat()
-            logger.info(
-                f" 🚧 Yielding {len(full_batch)} new alerts:\n{json.dumps(full_batch, indent=2)}")
-            yield f"data: {json.dumps(full_batch)}\n\n"
-        except asyncio.TimeoutError:
-            # No data? Keep it alive.
-            yield "data: keepalive\n\n"
-        except asyncio.CancelledError:
-            break'''
 
 
 async def host_info_async() -> dict:

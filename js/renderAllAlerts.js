@@ -100,6 +100,8 @@ export async function fetchAndRenderAlertDetail(alertId) {
                     <strong>Message:</strong> ${alert.msg}<br>
                     <strong>Status:</strong> ${alert.intel.status}<br>
                     <strong>Risk:</strong> ${alert.intel.risk_level}<br>
+                    <strong>Abuse IPDB Score:</strong> ${alert.intel.score}<br>
+                    <strong>AI Analysis:</strong> ${alert.intel.analysis}<br>
                     <strong>Action:</strong> ${alert.intel.recommended_action}<br>
                     <strong>Country:</strong> ${alert.intel.country}<br>
                     <strong>Reports:</strong> ${alert.intel.total_reports}<br>

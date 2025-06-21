@@ -2,9 +2,11 @@ import asyncio
 import json
 import logging
 import threading
+from asyncio import Queue
 from collections import deque
 from dataclasses import asdict, is_dataclass
-from typing import Awaitable, Callable, Optional
+from datetime import datetime
+from typing import Awaitable, Callable, Optional, Union
 
 from fastapi import Request
 
@@ -15,7 +17,7 @@ logger = logging.getLogger(__name__)
 class StreamManager:
     def __init__(
             self,
-            data_fn: Callable[[Optional[any]], Awaitable[any]],
+            data_fn: Callable[[Optional[any]], Awaitable[any]] = None,
             deque: Optional[deque] = None,
             queue: Optional[asyncio.Queue] = None,
             script: str | None = None,
@@ -36,30 +38,34 @@ class StreamManager:
             stderr=asyncio.subprocess.PIPE
         )
 
-    async def get_output(self):
-        data = await self.run_script() if self.script else None
-        return await self.output(data)
-
     async def queue_delivery(self, request: Request):
+        old_snapshot = []
         yield "data: keepalive\n\n"
-        while not await request.is_disconnected():
-            try:
-                if self.queue.qsize() == self.queue.maxsize:
-                    data_batch = []
-                    while not self.queue.empty():
-                        data_batch.append(await self.queue.get())
-                    yield f"data: {json.dumps(data_batch)}\n\n"
-                else:
-                    await asyncio.sleep(1)
+        try:
+            while not await request.is_disconnected():
+                serialized_alerts = await self.serialize(self.queue)
+                if not serialized_alerts or serialized_alerts == old_snapshot:
                     yield "data: keepalive\n\n"
-            except asyncio.TimeoutError:
-                yield "data: keepalive\n\n"
+                    await asyncio.sleep(6)
+                    continue
+                logger.info(
+                    f' Delivering {len(serialized_alerts)} queued alerts.')
+                for alert in serialized_alerts:
+                    if isinstance(alert.get("timestamp"), datetime):
+                        alert["timestamp"] = alert["timestamp"].isoformat()
+                yield f"data: {json.dumps(serialized_alerts)}\n\n"
+                old_snapshot = serialized_alerts
+        except Exception as e:
+            logger.error(f"🚨 queue_delivery error: {e}")
+            yield "event: error\ndata: {}\n\n"
+        except asyncio.CancelledError:
+            logger.info("Delivery loop cancelled.")
 
     async def deque_delivery(self, request: Request):
         old_snapshot = []
         try:
             while not await request.is_disconnected():
-                serialized = self.serialize(self.deque)
+                serialized = await self.serialize(self.deque)
                 new_snapshot = self.group_fn(
                     serialized) if self.group_fn else serialized
 
@@ -68,13 +74,22 @@ class StreamManager:
                     old_snapshot = new_snapshot
 
                 await asyncio.sleep(1)
+                yield "data: keepalive\n\n"
         except Exception as e:
             logger.error(f"🚨 deque_delivery error: {e}")
             yield "event: error\ndata: {}\n\n"
 
-    def serialize(self, items: deque):
-        """Universal serializer for dicts and dataclasses."""
-        list_items = list(items)
+    async def serialize(self, items: Union[deque, Queue]):
+        """Universal serializer for various deques and Queues"""
+        if isinstance(items, deque):
+            list_items = list(items)
+        elif isinstance(items, Queue):
+            list_items = []
+            while not items.empty():
+                item = await items.get()
+                list_items.append(item)
+        else:
+            raise TypeError(f"Unsupported stream type: {type(items)}")
         return [
             asdict(item) if is_dataclass(item)
             else item

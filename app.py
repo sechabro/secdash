@@ -24,11 +24,11 @@ import schemas
 from database import create_tables, database_check, get_session
 from ipset import ipset_calls
 from stream_manager import StreamManager
-from utils import (alert_stream_delivery, alerts, established_connections,
-                   group_by_keys, host_info_async, io_stream, iostats,
-                   ip_stream_delivery, ip_stream_manager, ips, ips_lock,
-                   password_hasher, password_verify, ps_stream, running_ps,
-                   ssh_stream, stream_delivery)
+from utils import (alerts, established_connections, group_by_keys,
+                   host_info_async, io_stream, iostats, ip_stream_delivery,
+                   ip_stream_manager, ips, ips_lock, password_hasher,
+                   password_verify, ps_stream, running_ps, ssh_stream,
+                   stream_delivery)
 
 load_dotenv()
 
@@ -87,6 +87,10 @@ ps_stream_manager = StreamManager(
 
 )
 
+alerts_stream_manager = StreamManager(
+    queue=asyncio.Queue()
+)
+
 
 @app.on_event("startup")
 async def on_startup():
@@ -96,7 +100,6 @@ async def on_startup():
         logger.info(f' Database already exists... Checking tables...')
     if await create_tables():
         logger.info(f' Table check successful.')
-
     app.state.iostat_task = asyncio.create_task(
         io_stream(
             iostat_manager=iostream_manager
@@ -108,8 +111,8 @@ async def on_startup():
     app.state.ssh_task = asyncio.create_task(
         ssh_stream(script="./scripts/vps_login_monitor.sh")
     )
-    app.state.ips_task = asyncio.create_task(
-        crud.get_unanalyzed_ips()
+    app.state.alerts_task = asyncio.create_task(
+        crud.get_unanalyzed_ips(alert_manager=alerts_stream_manager)
     )
     app.state.ips_stream_task = asyncio.create_task(
         ip_stream_manager()
@@ -122,7 +125,7 @@ async def shutdown_async():
     app.state.iostat_task.cancel()
     app.state.ps_task.cancel()
     app.state.ssh_task.cancel()
-    app.state.ips_task.cancel()
+    app.state.alerts_task.cancel()
     app.state.ips_stream_task.cancel()
     logger.info(f' System metrics streams stopped...')
 
@@ -272,7 +275,9 @@ async def get_alerts(
     current_user: str = Depends(get_current_user)
 ) -> StreamingResponse:
     return (StreamingResponse(
-        alert_stream_delivery(request=request),
+        alerts_stream_manager.queue_delivery(
+            request=request
+        ),
         media_type="text/event-stream"
     ))
 
