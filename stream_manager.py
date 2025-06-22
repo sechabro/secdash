@@ -55,6 +55,9 @@ class StreamManager:
                         alert["timestamp"] = alert["timestamp"].isoformat()
                 yield f"data: {json.dumps(serialized_alerts)}\n\n"
                 old_snapshot = serialized_alerts
+
+            logger.info("⚠️ Client disconnected, clearing alert queue.")
+            self.queue = asyncio.Queue()
         except Exception as e:
             logger.error(f"🚨 queue_delivery error: {e}")
             yield "event: error\ndata: {}\n\n"

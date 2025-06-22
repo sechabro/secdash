@@ -24,11 +24,10 @@ import schemas
 from database import create_tables, database_check, get_session
 from ipset import ipset_calls
 from stream_manager import StreamManager
-from utils import (alerts, established_connections, group_by_keys,
-                   host_info_async, io_stream, iostats, ip_stream_delivery,
-                   ip_stream_manager, ips, ips_lock, password_hasher,
-                   password_verify, ps_stream, running_ps, ssh_stream,
-                   stream_delivery)
+from utils import (established_connections, group_by_keys, host_info_async,
+                   io_stream, ip_stream_delivery, ip_stream_manager, ips,
+                   ips_lock, password_hasher, password_verify, ps_stream,
+                   ssh_watch)
 
 load_dotenv()
 
@@ -91,6 +90,11 @@ alerts_stream_manager = StreamManager(
     queue=asyncio.Queue()
 )
 
+ssh_watch_manager = StreamManager(
+    script="./scripts/vps_login_monitor.sh",
+    deque=deque(maxlen=20)
+)
+
 
 @app.on_event("startup")
 async def on_startup():
@@ -109,7 +113,7 @@ async def on_startup():
         ps_stream(ps_manager=ps_stream_manager)
     )
     app.state.ssh_task = asyncio.create_task(
-        ssh_stream(script="./scripts/vps_login_monitor.sh")
+        ssh_watch(ssh_manager=ssh_watch_manager)
     )
     app.state.alerts_task = asyncio.create_task(
         crud.get_unanalyzed_ips(alert_manager=alerts_stream_manager)

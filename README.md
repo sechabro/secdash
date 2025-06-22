@@ -45,6 +45,7 @@ When risky IPs are identified, SecDash can:
 ---
 
 ## Getting Started
+- First things first. Login to your vps, VIM into your sshd_config file, and make it do this: `PasswordAuthentication no`.
 - Clone this repo.
 - Make a .env with the following:
 ```

@@ -240,7 +240,7 @@ async def ai_analysis_update(ip_updates: list[dict], alert_manager: StreamManage
 
 async def get_unanalyzed_ips(alert_manager: StreamManager) -> list[schemas.FailedLoginInMem]:
     try:
-        logger.info(f' SSH monitoring started')
+        logger.info(f' New IP monitoring started')
         while True:
             async with async_session_maker() as session:
                 await asyncio.sleep(30)

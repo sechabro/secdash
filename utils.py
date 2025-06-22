@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 psh = PasswordHasher()
 
 # Datastreams deque & lock
-ssh_lines = deque(maxlen=20)
+# ssh_lines = deque(maxlen=20)
 ips = deque()
 country_counts = deque()
 ssh_lock = threading.Lock()
@@ -67,11 +67,13 @@ async def run_script(script: str | None = None):
 
 
 ###############################################################################
-####################### UNIVERSAL STREAM DELIVERY SERVICE #####################
-##################### WITH HELPERS! ###########################################
+###############################################################################
+###############################################################################
 
+# DRAGON [2025-06-22]: Holdovers from the evil `stream_delivery()` monolith.
+# Leave for now, will be valuable to integrate into StreamManager.
 
-def get_field_value(item: Any, field: str):
+'''def get_field_value(item: Any, field: str):
     """Universal accessor for both dicts and dataclasses."""
     if isinstance(item, dict):
         return item.get(field, None)
@@ -79,80 +81,17 @@ def get_field_value(item: Any, field: str):
         return getattr(item, field, None)
     return None
 
-# DRAGON [2025-05-27]: stream_delivery() has mutated into an
-# overloaded multi-purpose stream processor responsible for sorting,
-# filtering, grouping, pagination, and SSE serialization for any
-# arbitrary data type. It needs serious breaking up. But that will
-# require a serious refactor of all SSE and perhaps even dataclass
-# schemas. This comes after MVP deployment. Until then: leave it
-# alone, and no more integrations with it.
-
-
-async def stream_delivery(
-    data_stream: deque,
-    sort: bool | None = False,
-    key: str | None = None,
-    group: bool | None = False,
-    outer_key: str | None = None,
-    inner_key: str | None = None,
-    filter_field: str | None = None,
-    filter_param: str | None = None,
-    page: int | None = None,
-    limit: int | None = None
-):
-    old_snapshot = []
-    while True:
-        await asyncio.sleep(1)
-        total_items = None
-        new_snapshot = list(data_stream)
-
-        # Sorting
-        if sort and key:
-            new_snapshot.sort(
-                key=lambda item: get_field_value(item, key) or "")
-
-        # Filtering
-        if filter_field and filter_param is not None:
-            if isinstance(filter_param, str) and filter_param.lower() in ("true", "false"):
-                filter_param = filter_param.lower() == "true"
-
-            new_snapshot = [
-                item for item in new_snapshot
-                if get_field_value(item, filter_field) == filter_param
-            ]
-
-        if group:
-            grouping_snapshot = list(data_stream)
-            new_snapshot = group_by_keys(
-                items=grouping_snapshot, outer_key=outer_key, inner_key=inner_key)
-
-        # Pagination
-        if page is not None and limit is not None:
-            paginating_snapshot = new_snapshot
-            new_snapshot, total_items = paginate(
-                page=page, limit=limit, snapshot=paginating_snapshot)
-
-        if new_snapshot != old_snapshot:
-            # needed to determine page total for frontend
-            is_dc = is_dataclass(new_snapshot[0]) if new_snapshot else False
-            serialized = [
-                asdict(item) if is_dc else item for item in new_snapshot]
-            if total_items:
-                yield f"event: meta\ndata: {json.dumps({'total_items': total_items})}\n\n"
-            yield f"data: {json.dumps(serialized)}\n\n"
-            old_snapshot = new_snapshot
-
 
 def paginate(page: int, limit: int, snapshot: list) -> tuple:
     total_items = len(snapshot)
     start = (page - 1) * limit
     end = start + limit
     new_snapshot = snapshot[start:end]
-    return (new_snapshot, total_items)
+    return (new_snapshot, total_items)'''
 
 
 # closure implementation to allow for partial
-# arg construction on instantiation
+# arg construction on instantiation. Great little solution.
 def group_by_keys(outer_key: str, inner_key: str):
     def grouped_items(items: list[dict]) -> list:
         return_dict = {}
@@ -201,7 +140,6 @@ async def ps_stream(ps_manager: StreamManager):
 
     except Exception as e:
         logger.info(f' EXCEPTION: {e}')
-        # processes.terminate()
 
 ################################################################
 #### IOSTAT ####################################################
@@ -230,7 +168,6 @@ async def io_stream(iostat_manager: StreamManager):
             )
     except Exception as e:
         logger.error(f' EXCEPTION: {e}')
-        # iostat_data.terminate()
 
 ################################################################
 ##### FAILED ###################################################
@@ -239,18 +176,16 @@ async def io_stream(iostat_manager: StreamManager):
 ################ STREAM ########################################
 
 
-async def ssh_stream(script: str | None = None):
-    global ssh_lines
-
-    ssh_data = await run_script(script=script)
+async def ssh_watch(ssh_manager: StreamManager):
+    ssh_data = await ssh_manager.run_script()
     try:
-        logger.info(f' Ssh stream starting.')
+        logger.info(f' Ssh watch starting.')
         new_ssh_lines = deque()
         listener_note = False
         async for line in ssh_data.stdout:
             decode = line.decode().strip()
             if decode == "END":
-                old_snapshot = list(ssh_lines)
+                old_snapshot = list(ssh_manager.deque)
                 new_snapshot = list(new_ssh_lines)
                 if new_snapshot != old_snapshot:
                     new_crud_lines = [
@@ -258,9 +193,9 @@ async def ssh_stream(script: str | None = None):
                     logger.info(
                         f' 🌐 {len(new_crud_lines)} new ssh attempt(s) detected.')
                     await upsert_failed_login_attempt(batch=new_crud_lines)
-                    with ssh_lock:
-                        ssh_lines.clear()
-                        ssh_lines.extend(new_ssh_lines)
+                    with ssh_manager.lock:
+                        ssh_manager.deque.clear()
+                        ssh_manager.deque.extend(new_ssh_lines)
                     listener_note = True
                 elif listener_note:
                     logger.info(" Listening for new ssh attempts... 📡")
@@ -274,8 +209,18 @@ async def ssh_stream(script: str | None = None):
 
     except KeyboardInterrupt:
         print("Stopping SSH Monitor...")
-        ssh_data.terminate()
 
+
+################################################################
+##### IP #######################################################
+###### INFO ####################################################
+######### DELIVERY #############################################
+################ STREAM ########################################
+
+# DRAGON [2025-06-22]: Integrate via StreamManager class.
+# This system is somewhat different from what StreamManager handles.
+# It may be necessary to create a custom class for this, that inherits
+# StreamManager functionality.
 
 async def ip_stream_manager():
     global ips, country_counts
@@ -318,6 +263,8 @@ async def ip_stream_delivery():
             old_snapshot = new_snapshot
         else:
             pass
+
+###### MISCELLANEOUS ##################
 
 
 async def host_info_async() -> dict:

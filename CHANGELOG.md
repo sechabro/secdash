@@ -164,3 +164,11 @@
 ### Added:
 - Introduced SSE-based in-app alert delivery for live security notifications at `/alert-stream`. Includes AI-driven risk analysis alerts, autoban actions. Notified via toast alerts, with expandable content in message center.
 - Integrated Alembic for ease of db-related schema updates.
+
+## [version 1.0.2] - 2025.06.22
+### Added:
+- `StreamManager` class, in the new `stream_manager.py` module.
+### Changed:
+- Refactored 3/4 streams to integrate with `StreamManager`.
+### Fixed:
+- Removed the monolithic, and tightly-coupled `stream_delivery()` system.
