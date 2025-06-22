@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
@@ -22,11 +23,11 @@ import crud
 import schemas
 from database import create_tables, database_check, get_session
 from ipset import ipset_calls
-from utils import (alert_stream_delivery, alerts, established_connections,
-                   host_info_async, io_stream, iostats, ip_stream_delivery,
-                   ip_stream_manager, ips, ips_lock, password_hasher,
-                   password_verify, ps_stream, running_ps, ssh_stream,
-                   stream_delivery)
+from stream_manager import StreamManager
+from utils import (established_connections, group_by_keys, host_info_async,
+                   io_stream, ip_stream_delivery, ip_stream_manager, ips,
+                   ips_lock, password_hasher, password_verify, ps_stream,
+                   ssh_watch)
 
 load_dotenv()
 
@@ -71,6 +72,29 @@ async def get_current_user(access_token: str = Cookie(None)):
             f' \n\nInvalidTokenError exception raised for some reason...\n\n')
         raise credentials_exception
 
+iostream_manager = StreamManager(
+    data_fn=io_stream,
+    script="./scripts/iostat_logger.sh",
+    deque=deque(maxlen=30)
+)
+
+ps_stream_manager = StreamManager(
+    data_fn=ps_stream,
+    group_fn=group_by_keys(outer_key="user", inner_key="ppid"),
+    script="./scripts/ps_logger.sh",
+    deque=deque()
+
+)
+
+alerts_stream_manager = StreamManager(
+    queue=asyncio.Queue()
+)
+
+ssh_watch_manager = StreamManager(
+    script="./scripts/vps_login_monitor.sh",
+    deque=deque(maxlen=20)
+)
+
 
 @app.on_event("startup")
 async def on_startup():
@@ -81,14 +105,18 @@ async def on_startup():
     if await create_tables():
         logger.info(f' Table check successful.')
     app.state.iostat_task = asyncio.create_task(
-        io_stream(script="./scripts/iostat_logger.sh"))
-    app.state.ps_task = asyncio.create_task(
-        ps_stream(script="./scripts/ps_logger.sh"))
-    app.state.ssh_task = asyncio.create_task(
-        ssh_stream(script="./scripts/vps_login_monitor.sh")
+        io_stream(
+            iostat_manager=iostream_manager
+        )
     )
-    app.state.ips_task = asyncio.create_task(
-        crud.get_unanalyzed_ips()
+    app.state.ps_task = asyncio.create_task(
+        ps_stream(ps_manager=ps_stream_manager)
+    )
+    app.state.ssh_task = asyncio.create_task(
+        ssh_watch(ssh_manager=ssh_watch_manager)
+    )
+    app.state.alerts_task = asyncio.create_task(
+        crud.get_unanalyzed_ips(alert_manager=alerts_stream_manager)
     )
     app.state.ips_stream_task = asyncio.create_task(
         ip_stream_manager()
@@ -101,7 +129,7 @@ async def shutdown_async():
     app.state.iostat_task.cancel()
     app.state.ps_task.cancel()
     app.state.ssh_task.cancel()
-    app.state.ips_task.cancel()
+    app.state.alerts_task.cancel()
     app.state.ips_stream_task.cancel()
     logger.info(f' System metrics streams stopped...')
 
@@ -251,7 +279,9 @@ async def get_alerts(
     current_user: str = Depends(get_current_user)
 ) -> StreamingResponse:
     return (StreamingResponse(
-        alert_stream_delivery(request=request),
+        alerts_stream_manager.queue_delivery(
+            request=request
+        ),
         media_type="text/event-stream"
     ))
 
@@ -278,21 +308,24 @@ async def get_ips(
 
 
 @app.get("/iostat-stream")
-async def iostat_stream(current_user: str = Depends(get_current_user)) -> StreamingResponse:
+async def iostat_stream(
+    request: Request,
+    current_user: str = Depends(get_current_user)
+) -> StreamingResponse:
     return StreamingResponse(
-        stream_delivery(data_stream=iostats),
+        iostream_manager.deque_delivery(request=request),
         media_type="text/event-stream"
     )
 
 
 @app.get("/process-stream")
-async def process_stream(current_user: str = Depends(get_current_user)) -> StreamingResponse:
+async def process_stream(
+    request: Request,
+    current_user: str = Depends(get_current_user)
+) -> StreamingResponse:
     return StreamingResponse(
-        stream_delivery(
-            data_stream=running_ps,
-            group=True,
-            outer_key="user",
-            inner_key="ppid"
+        ps_stream_manager.deque_delivery(
+            request=request,
         ),
         media_type="text/event-stream"
     )

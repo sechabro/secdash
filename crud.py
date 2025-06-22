@@ -3,6 +3,7 @@ import logging
 from collections import defaultdict, deque
 from dataclasses import asdict
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi.concurrency import run_in_threadpool
 from pydantic import EmailStr
@@ -15,6 +16,7 @@ import schemas
 from database import async_session_maker
 from ipset import ipset_calls
 from services import ip_analysis_gathering, ipabuse_check
+from stream_manager import StreamManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -162,14 +164,11 @@ async def ip_status_update(ip: schemas.FailedLoginIPBan, session: AsyncSession):
         logger.error(f' Session Failure: {e}')
 
 
-'''async def alert_stream():
-    if alerts:
-        await alerts_queue.put([asdict(a) for a in alerts])
-        alerts.clear()  # clearing AFTER queueing. at the end of the flow.
-'''
+async def alert_queuing(alert: schemas.AlertInMem, alert_manager: StreamManager):
+    await alert_manager.queue.put(alert)
 
 
-async def insert_alert_from_mem(session: AsyncSession, alert: schemas.AlertInMem):
+async def insert_alert_from_mem(session: AsyncSession, alert: schemas.AlertInMem, alert_manager: Optional[StreamManager] = None):
     alert_db = schemas.AlertForDb(
         alert_type=alert.alert_type,
         ip_address=alert.ip,
@@ -181,10 +180,14 @@ async def insert_alert_from_mem(session: AsyncSession, alert: schemas.AlertInMem
     session.add(alert_db)
     await session.flush()  # <-- to get access to the assigned id
     alert.alert_id = alert_db.id
-    alerts.append(alert)
+    if alert_manager:
+        try:
+            await alert_queuing(alert=alert, alert_manager=alert_manager)
+        except Exception as e:
+            logger.info(f' Failed to queue alert {alert.alert_id}. {e}')
 
 
-async def ai_analysis_update(ip_updates: list[dict]):
+async def ai_analysis_update(ip_updates: list[dict], alert_manager: StreamManager):
     async with async_session_maker() as session:
         try:
             successful = 0
@@ -219,7 +222,7 @@ async def ai_analysis_update(ip_updates: list[dict]):
                         )
 
                         await session.execute(stmt)
-                        await insert_alert_from_mem(session=session, alert=alert)
+                        await insert_alert_from_mem(session=session, alert=alert, alert_manager=alert_manager)
                         logger.info(
                             f' {alert.msg} Analysis complete. Update successful.'
                         )
@@ -229,17 +232,15 @@ async def ai_analysis_update(ip_updates: list[dict]):
                             f' Failed to execute update for {entry.get("ip_address")} {e}')
                         # await session.rollback() <-- not needed with `session.begin_nested()`
             await session.commit()
-            logger.info(f" {successful} successful updates. Queueing alerts.")
-            # await alert_stream()
-            logger.info(f" Alerts dequed successfully.")
+            logger.info(f" {successful} successful updates.")
 
         except Exception as e:
             logger.error(f' Session Failure: {e}')
 
 
-async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
+async def get_unanalyzed_ips(alert_manager: StreamManager) -> list[schemas.FailedLoginInMem]:
     try:
-        logger.info(f' SSH monitoring started')
+        logger.info(f' New IP monitoring started')
         while True:
             async with async_session_maker() as session:
                 await asyncio.sleep(30)
@@ -270,7 +271,7 @@ async def get_unanalyzed_ips() -> list[schemas.FailedLoginInMem]:
                     continue
 
                 analyzed_ips = await ip_analysis_gathering(ip_info=for_analysis)
-                await ai_analysis_update(ip_updates=analyzed_ips)
+                await ai_analysis_update(ip_updates=analyzed_ips, alert_manager=alert_manager)
 
     except Exception as e:
         logger.error(f' 🤮 IP analysis loop crashed: {e}')
@@ -316,6 +317,7 @@ async def get_alert_and_ip(alert_id: int, session: AsyncSession) -> dict:
             "risk_level": alert.intel.risk.value,
             "recommended_action": alert.intel.action.value,
             "country": alert.intel.ipdb.get("countryCode"),
+            "score": alert.intel.ipdb.get("abuseConfidenceScore"),
             "attempt_count": alert.intel.count,
             "total_reports": alert.intel.ipdb.get("totalReports"),
             "first_seen": alert.intel.first_seen.isoformat(),

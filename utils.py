@@ -19,21 +19,18 @@ from h11 import Request
 from crud import alerts, get_all_ips, upsert_failed_login_attempt
 from database import async_session_maker
 from schemas import IoStatLineInMem
+from stream_manager import StreamManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 psh = PasswordHasher()
 
 # Datastreams deque & lock
-iostats = deque(maxlen=30)
-running_ps = deque()
-ssh_lines = deque(maxlen=20)
+# ssh_lines = deque(maxlen=20)
 ips = deque()
 country_counts = deque()
-ps_lock = threading.Lock()
 ssh_lock = threading.Lock()
 ips_lock = threading.Lock()
-alerts_lock = threading.Lock()
 
 
 def established_connections():
@@ -70,11 +67,13 @@ async def run_script(script: str | None = None):
 
 
 ###############################################################################
-####################### UNIVERSAL STREAM DELIVERY SERVICE #####################
-##################### WITH HELPERS! ###########################################
+###############################################################################
+###############################################################################
 
+# DRAGON [2025-06-22]: Holdovers from the evil `stream_delivery()` monolith.
+# Leave for now, will be valuable to integrate into StreamManager.
 
-def get_field_value(item: Any, field: str):
+'''def get_field_value(item: Any, field: str):
     """Universal accessor for both dicts and dataclasses."""
     if isinstance(item, dict):
         return item.get(field, None)
@@ -83,95 +82,29 @@ def get_field_value(item: Any, field: str):
     return None
 
 
-def serialize(item: Any):
-    """Universal serializer for dicts and dataclasses."""
-    if is_dataclass(item):
-        return asdict(item)
-    return item  # assuming it's already a dict
-
-# DRAGON [2025-05-27]: stream_delivery() has mutated into an
-# overloaded multi-purpose stream processor responsible for sorting,
-# filtering, grouping, pagination, and SSE serialization for any
-# arbitrary data type. It needs serious breaking up. But that will
-# require a serious refactor of all SSE and perhaps even dataclass
-# schemas. This comes after MVP deployment. Until then: leave it
-# alone, and no more integrations with it.
-
-
-async def stream_delivery(
-    data_stream: deque,
-    sort: bool | None = False,
-    key: str | None = None,
-    group: bool | None = False,
-    outer_key: str | None = None,
-    inner_key: str | None = None,
-    filter_field: str | None = None,
-    filter_param: str | None = None,
-    page: int | None = None,
-    limit: int | None = None
-):
-    old_snapshot = []
-    while True:
-        await asyncio.sleep(1)
-        total_items = None
-        new_snapshot = list(data_stream)
-
-        # Sorting
-        if sort and key:
-            new_snapshot.sort(
-                key=lambda item: get_field_value(item, key) or "")
-
-        # Filtering
-        if filter_field and filter_param is not None:
-            if isinstance(filter_param, str) and filter_param.lower() in ("true", "false"):
-                filter_param = filter_param.lower() == "true"
-
-            new_snapshot = [
-                item for item in new_snapshot
-                if get_field_value(item, filter_field) == filter_param
-            ]
-
-        if group:
-            grouping_snapshot = list(data_stream)
-            new_snapshot = group_by_keys(
-                items=grouping_snapshot, outer_key=outer_key, inner_key=inner_key)
-
-        # Pagination
-        if page is not None and limit is not None:
-            paginating_snapshot = new_snapshot
-            new_snapshot, total_items = paginate(
-                page=page, limit=limit, snapshot=paginating_snapshot)
-
-        if new_snapshot != old_snapshot:
-            # needed to determine page total for frontend
-            is_dc = is_dataclass(new_snapshot[0]) if new_snapshot else False
-            serialized = [
-                asdict(item) if is_dc else item for item in new_snapshot]
-            if total_items:
-                yield f"event: meta\ndata: {json.dumps({'total_items': total_items})}\n\n"
-            yield f"data: {json.dumps(serialized)}\n\n"
-            old_snapshot = new_snapshot
-
-
 def paginate(page: int, limit: int, snapshot: list) -> tuple:
     total_items = len(snapshot)
     start = (page - 1) * limit
     end = start + limit
     new_snapshot = snapshot[start:end]
-    return (new_snapshot, total_items)
+    return (new_snapshot, total_items)'''
 
 
-def group_by_keys(items: list[dict], outer_key: str, inner_key: str) -> list:
-    return_dict = {}
-    for item in items:
-        group = item.get(outer_key)
-        group_value = item.get(inner_key)
-        if not return_dict.get(group):
-            return_dict.update({group: {}})
-        if not return_dict[group].get(group_value):
-            return_dict[group][group_value] = []
-        return_dict[group][group_value].append(item)
-    return [{group: data} for group, data in return_dict.items()]
+# closure implementation to allow for partial
+# arg construction on instantiation. Great little solution.
+def group_by_keys(outer_key: str, inner_key: str):
+    def grouped_items(items: list[dict]) -> list:
+        return_dict = {}
+        for item in items:
+            group = item.get(outer_key)
+            group_value = item.get(inner_key)
+            if not return_dict.get(group):
+                return_dict[group] = {}
+            if not return_dict[group].get(group_value):
+                return_dict[group][group_value] = []
+            return_dict[group][group_value].append(item)
+        return [{group: data} for group, data in return_dict.items()]
+    return grouped_items
 
 
 ###############################################################################
@@ -180,9 +113,8 @@ def group_by_keys(items: list[dict], outer_key: str, inner_key: str) -> list:
 ####################### STREAM ################################################
 
 
-async def ps_stream(script: str | None = None):
-    global running_ps
-    processes = await run_script(script=script)
+async def ps_stream(ps_manager: StreamManager):
+    processes = await ps_manager.run_script()
 
     try:
         logger.info(f' Process stream starting.')
@@ -191,22 +123,23 @@ async def ps_stream(script: str | None = None):
             line_strip = line.decode().strip()
             if line_strip == "END":
                 if ps_deque_swap:
-                    with ps_lock:
-                        running_ps.clear()
-                        running_ps.extend(ps_deque_swap)
+                    # logger.info(
+                    #    f"⏱️ Process lines parsed: {len(ps_deque_swap)}")
+                    with ps_manager.lock:
+                        ps_manager.deque.clear()
+                        ps_manager.deque.extend(ps_deque_swap)
                     ps_deque_swap.clear()
             else:
                 columns = ["timestamp", "pid", "ppid", "user",
                            "cpu_pct", "stat", "start", "time", "command"]
                 fields = line.decode().strip().split(",")
 
-                # pad fields to full length if command value is missing
+                # pad fields to full length if command value is missing from line
                 fields += ["n/a"] * (len(columns) - len(fields))
                 ps_deque_swap.append(dict(zip(columns, fields)))
 
     except Exception as e:
         logger.info(f' EXCEPTION: {e}')
-        processes.terminate()
 
 ################################################################
 #### IOSTAT ####################################################
@@ -214,14 +147,14 @@ async def ps_stream(script: str | None = None):
 ############### STREAM #########################################
 
 
-async def io_stream(script: str | None = None):
-    iostat_data = await run_script(script=script)
+async def io_stream(iostat_manager: StreamManager):
+    iostat_data = await iostat_manager.run_script()
     try:
         logger.info(f' Iostat stream starting.')
         async for line in iostat_data.stdout:
             (date, time, user, nice, sys, iowait, steal,
              idle) = line.decode().strip().split(",")
-            iostats.append(
+            iostat_manager.deque.append(
                 IoStatLineInMem(
                     date=date,
                     time=time,
@@ -235,7 +168,6 @@ async def io_stream(script: str | None = None):
             )
     except Exception as e:
         logger.error(f' EXCEPTION: {e}')
-        iostat_data.terminate()
 
 ################################################################
 ##### FAILED ###################################################
@@ -244,18 +176,16 @@ async def io_stream(script: str | None = None):
 ################ STREAM ########################################
 
 
-async def ssh_stream(script: str | None = None):
-    global ssh_lines
-
-    ssh_data = await run_script(script=script)
+async def ssh_watch(ssh_manager: StreamManager):
+    ssh_data = await ssh_manager.run_script()
     try:
-        logger.info(f' Ssh stream starting.')
+        logger.info(f' Ssh watch starting.')
         new_ssh_lines = deque()
         listener_note = False
         async for line in ssh_data.stdout:
             decode = line.decode().strip()
             if decode == "END":
-                old_snapshot = list(ssh_lines)
+                old_snapshot = list(ssh_manager.deque)
                 new_snapshot = list(new_ssh_lines)
                 if new_snapshot != old_snapshot:
                     new_crud_lines = [
@@ -263,9 +193,9 @@ async def ssh_stream(script: str | None = None):
                     logger.info(
                         f' 🌐 {len(new_crud_lines)} new ssh attempt(s) detected.')
                     await upsert_failed_login_attempt(batch=new_crud_lines)
-                    with ssh_lock:
-                        ssh_lines.clear()
-                        ssh_lines.extend(new_ssh_lines)
+                    with ssh_manager.lock:
+                        ssh_manager.deque.clear()
+                        ssh_manager.deque.extend(new_ssh_lines)
                     listener_note = True
                 elif listener_note:
                     logger.info(" Listening for new ssh attempts... 📡")
@@ -279,8 +209,18 @@ async def ssh_stream(script: str | None = None):
 
     except KeyboardInterrupt:
         print("Stopping SSH Monitor...")
-        ssh_data.terminate()
 
+
+################################################################
+##### IP #######################################################
+###### INFO ####################################################
+######### DELIVERY #############################################
+################ STREAM ########################################
+
+# DRAGON [2025-06-22]: Integrate via StreamManager class.
+# This system is somewhat different from what StreamManager handles.
+# It may be necessary to create a custom class for this, that inherits
+# StreamManager functionality.
 
 async def ip_stream_manager():
     global ips, country_counts
@@ -324,65 +264,7 @@ async def ip_stream_delivery():
         else:
             pass
 
-# DRAGON [2025-06-13]: Directly clearing `alerts_queue._queue`.
-# This bypasses the normal `get()` flow and should ONLY be used
-# when we are certain that no other coroutines are reading/writing
-# concurrently.
-
-
-async def alert_stream_delivery(request: Request):
-    logger.info("Alert stream starting...")
-
-    with alerts_lock:
-        alerts.clear()
-
-    yield "data: keepalive\n\n"
-    old_snapshot = []
-
-    while True:
-        if await request.is_disconnected():
-            logger.info("🔌 Client disconnected from alert stream.")
-            break
-
-        await asyncio.sleep(10)  # avoid CPU churn
-
-        with alerts_lock:
-            new_snapshot = [asdict(a) for a in alerts]
-            alerts.clear()
-
-        for alert in new_snapshot:
-            if isinstance(alert.get("timestamp"), datetime):
-                alert["timestamp"] = alert["timestamp"].isoformat()
-
-        if new_snapshot and new_snapshot != old_snapshot:
-            logger.info(
-                f"🚧 Yielding {len(new_snapshot)} new alerts:\n{json.dumps(new_snapshot, indent=2)}")
-            yield f"data: {json.dumps(new_snapshot)}\n\n"
-
-            old_snapshot = new_snapshot
-        else:
-            yield "data: keepalive\n\n"
-
-'''async def alert_stream_delivery(request: Request):
-    yield "data: keepalive\n\n"  # 🔥 send early, keep connection alive
-
-    while True:
-        if await request.is_disconnected():
-            break
-        try:
-            first_batch = await asyncio.wait_for(alerts_queue.get(), timeout=10)
-            full_batch = list(first_batch)
-            for item in full_batch:
-                if isinstance(item.get("timestamp"), datetime):
-                    item["timestamp"] = item["timestamp"].isoformat()
-            logger.info(
-                f" 🚧 Yielding {len(full_batch)} new alerts:\n{json.dumps(full_batch, indent=2)}")
-            yield f"data: {json.dumps(full_batch)}\n\n"
-        except asyncio.TimeoutError:
-            # No data? Keep it alive.
-            yield "data: keepalive\n\n"
-        except asyncio.CancelledError:
-            break'''
+###### MISCELLANEOUS ##################
 
 
 async def host_info_async() -> dict:
