@@ -115,6 +115,9 @@ async def on_startup():
     app.state.ssh_task = asyncio.create_task(
         ssh_watch(ssh_manager=ssh_watch_manager)
     )
+    app.state.queue_clear_task = asyncio.create_task(
+        alerts_stream_manager.alert_queue_clear()
+    )
     app.state.alerts_task = asyncio.create_task(
         crud.get_unanalyzed_ips(alert_manager=alerts_stream_manager)
     )
@@ -131,6 +134,7 @@ async def shutdown_async():
     app.state.ssh_task.cancel()
     app.state.alerts_task.cancel()
     app.state.ips_stream_task.cancel()
+    app.state.queue_clear_task.cancel()
     logger.info(f' System metrics streams stopped...')
 
 
