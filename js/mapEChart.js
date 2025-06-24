@@ -112,4 +112,6 @@ export function renderWorldMap(country_counts) {
         const filtered = allIpData.filter(entry => targetCodes.includes(entry.country));
         showCountryModal(countryName, filtered);
     });
+    const mapReadyEvent = new Event("map-ready");
+    window.dispatchEvent(mapReadyEvent);
 }

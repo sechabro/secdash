@@ -15,10 +15,20 @@ export function initializeUIHandlers() {
             window.runWhenReady(() => window.fetchConnectionsData());
         } else if (tabId === 'ip-panel-section') {
             const chart = getMapChart();
+            const spinner = document.getElementById("wait-spinner-analysis");
             if (chart) {
                 chart.resize();
             } else {
-                console.warn("⚠️ mapChart not initialized yet — resize skipped.");
+                if (spinner) spinner.classList.remove("hidden");
+
+                // Listen for map to finish loading
+                window.addEventListener("map-ready", () => {
+                    const mapChart = getMapChart();
+                    if (mapChart) {
+                        mapChart.resize();
+                    }
+                    if (spinner) spinner.classList.add("hidden");
+                }, { once: true });
             }
         }
     }
