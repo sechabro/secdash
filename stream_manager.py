@@ -30,6 +30,7 @@ class StreamManager:
         self.deque = deque
         self.lock = threading.Lock()
         self.group_fn = group_fn
+        self.active_connections = 0
 
     async def run_script(self):
         return await asyncio.create_subprocess_exec(
@@ -39,6 +40,7 @@ class StreamManager:
         )
 
     async def queue_delivery(self, request: Request):
+        self.active_connections += 1
         old_snapshot = []
         yield "data: keepalive\n\n"
         try:
@@ -61,9 +63,17 @@ class StreamManager:
         except asyncio.CancelledError:
             logger.info("Delivery loop cancelled.")
         finally:
+            self.active_connections -= 1
             logger.info(
-                "No client connection. — clearing queue.")
-            self.queue = asyncio.Queue()
+                f' Disconnect detected. Connections remaining: {self.active_connections}'
+            )
+
+    async def alert_queue_clear(self):
+        while True:
+            await asyncio.sleep(30)
+            if self.active_connections == 0 and not self.queue.empty():
+                logger.info(" No active client. Clearing alert queue.")
+                self.queue = asyncio.Queue()
 
     async def deque_delivery(self, request: Request):
         old_snapshot = []
