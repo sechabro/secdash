@@ -1,4 +1,4 @@
-import { fetchAndRenderAlertDetail, renderAllAlerts } from "./renderAllAlerts.js";
+import { fetchAndRenderAlertDetail, renderAllAlerts } from "./not_in_use/renderAllAlerts.js";
 let toastCount = 0;
 
 export function showToast(alert) {

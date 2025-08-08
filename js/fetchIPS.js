@@ -19,19 +19,3 @@ export function startIPDataStream() {
 
     return ipEventSource;
 }
-
-//export function waitForNextIPStreamUpdate(callback) {
-//    const tempEventSource = new EventSource("/ip-stream");
-//
-//    tempEventSource.onmessage = function (event) {
-//        const { ips } = JSON.parse(event.data);
-//        allIpData.splice(0, allIpData.length, ...ips);  // update in-place
-//        tempEventSource.close(); // only once
-//        callback();
-//    };
-
-//    tempEventSource.onerror = function () {
-//        console.error("Temporary stream listener failed.");
-//        tempEventSource.close();
-//    };
-//}

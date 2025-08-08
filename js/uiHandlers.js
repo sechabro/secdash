@@ -1,5 +1,7 @@
+import { startStream } from './controllerTemplates.js';
+import { alertStreamRender, ioStatRender, renderAllAlerts, renderGroupedProcesses } from './dataRenderers.js';
 import { getMapChart } from './mapEChart.js';
-import { renderAllAlerts } from './renderAllAlerts.js';
+
 
 export function initializeUIHandlers() {
     // TAB SWITCHING HANDLER
@@ -44,9 +46,9 @@ export function initializeUIHandlers() {
     });
 
     // SSE STREAMS AND START TRIGGERS
-    window.runWhenReady(() => { window.alertStream = startAlertStream(); });
-    window.runWhenReady(() => { window.iostatStream = startIostatStream(); });
-    window.runWhenReady(() => { window.processStream = startProcessStream(); });
+    window.runWhenReady(() => { window.iostatStream = startStream("/iostat-stream", ioStatRender); });
+    window.runWhenReady(() => { window.alertStream = startStream("/alert-stream", alertStreamRender); });
+    window.runWhenReady(() => { window.processStream = startStream("/process-stream", renderGroupedProcesses) })
     window.runWhenReady(() => { window.ipStream = startIPDataStream(); });
 
     // show visitors tab by default:

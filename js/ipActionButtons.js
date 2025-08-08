@@ -1,6 +1,6 @@
-import { iPSetCall } from "./iPSetCall.js";
+import { postWithObj } from "./controllerTemplates.js";
 import { showCountryModal } from "./mapModal.js";
-import { fetchAndRenderAlertDetail } from "./renderAllAlerts.js";
+import { fetchAndRenderAlertDetail } from "./not_in_use/renderAllAlerts.js";
 
 const callbacks = {
     fetchAndRenderAlertDetail,
@@ -22,7 +22,7 @@ export async function createIPActionButton(ip, alertId = null, callback = null) 
             ip: ip.ip,
             status: ip.status === "active" ? "banned" : "active"
         };
-        const result = await iPSetCall(iPObj);
+        const result = await postWithObj("/ipset-calling", iPObj);
 
         if (result) {
             if (iPObj.status === "active") {

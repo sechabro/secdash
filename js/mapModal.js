@@ -1,5 +1,5 @@
+import { postWithObj } from "./controllerTemplates.js";
 import { allIpData } from "./fetchIPS.js";
-import { iPSetCall } from "./iPSetCall.js";
 import { getMapChart, nameToCode } from "./mapEChart.js";
 
 export function showCountryModal(countryName, ipData) {
@@ -38,7 +38,7 @@ export function showCountryModal(countryName, ipData) {
                 status: ip.status === "active" ? "banned" : "active"
             };
 
-            const result = await iPSetCall(iPObj);
+            const result = await postWithObj("/ipset-calling", iPObj);
 
             if (result) {
                 alert(`${iPObj.ip} has been ${result.status}. DB update: ${result.db_update}`);
