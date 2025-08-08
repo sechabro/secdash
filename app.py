@@ -36,7 +36,12 @@ logger = logging.getLogger(__name__)
 
 templates = Jinja2Templates(directory="templates")
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
-app = FastAPI()
+app = FastAPI(
+    title="SecDash",
+    docs_url=None,        # disables Swagger UI at /docs
+    redoc_url=None,       # disables ReDoc at /redoc
+    openapi_url=None      # disables OpenAPI JSON at /openapi.json
+)
 app.mount("/js", StaticFiles(directory="js"), name="js")
 app.mount("/styles", StaticFiles(directory="styles"), name="styles")
 app.mount("/img", StaticFiles(directory="img"), name="img")

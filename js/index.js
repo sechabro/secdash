@@ -1,11 +1,12 @@
-import { startAlertStream } from './alertStreamHandler.js';
+//import { startAlertStream } from './alertStreamHandler.js';
+import { startStream } from './controllerTemplates.js';
 import { fetchConnectionsData } from "./fetchConnectionsData.js";
 import { fetchHostStatus } from "./fetchHostStatus.js";
 import { startIPDataStream } from "./fetchIPS.js";
 import './ioChart.js';
-import { startIostatStream } from "./iostatStreamHandler.js";
-import { startProcessStream } from "./processStreamHandler.js";
-import { renderGroupedProcesses } from './renderGroupedProcesses.js';
+//import { startIostatStream } from "./iostatStreamHandler.js";
+//import { startProcessStream } from "./processStreamHandler.js";
+//import { renderGroupedProcesses } from './renderGroupedProcesses.js';
 import { runWhenReady } from "./runWhenReady.js";
 import { initializeUIHandlers } from "./uiHandlers.js";
 //import { initVisitorPagination } from './visitorPagination.js';
@@ -15,19 +16,15 @@ export {
     fetchConnectionsData,
     fetchHostStatus,
     initializeUIHandlers,
-    renderGroupedProcesses,
-    runWhenReady, startAlertStream, startIostatStream,
+    runWhenReady,
     startIPDataStream,
-    startProcessStream
+    startStream
 };
 
 window.fetchHostStatus = fetchHostStatus;
 window.fetchConnectionsData = fetchConnectionsData;
-window.renderGroupedProcesses = renderGroupedProcesses;
-window.startIostatStream = startIostatStream;
-window.startProcessStream = startProcessStream;
+window.startStream = startStream;
 window.startIPDataStream = startIPDataStream;
-window.startAlertStream = startAlertStream;
 window.runWhenReady = runWhenReady;
 
 
@@ -41,7 +38,3 @@ window.closeAllStreams = function () {
 
 // ✅ Autostart the dashboard UI
 initializeUIHandlers();
-//startAlertStream();
-//initVisitorPagination();
-//casesViewSwitch();
-//liveDashboardSwitch();
