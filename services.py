@@ -15,6 +15,8 @@ load_dotenv()
 
 ipdb_key = os.getenv("IPDB")
 openai_key = os.getenv("OPENKEY001")
+gateway = os.getenv("GATEWAY")
+
 # org = os.getenv("OPENORG")  # optional, for organization arg if needed
 client = OpenAI(api_key=openai_key)
 
@@ -127,32 +129,8 @@ async def ip_analysis_gathering(ip_info: list[FailedLoginInMem]) -> list[dict]:
 
 
 async def ipabuse_check(ip: str):
-    url = "https://api.abuseipdb.com/api/v2/check"
-    headers = {
-        "Key": ipdb_key,
-        "Accept": "application/json"
-    }
-    params = {
-        "ipAddress": ip,
-        "maxAgeInDays": 90
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers=headers, params=params)
-        response.raise_for_status()  # raises an error for bad responses
-
-    return response.json().get("data", {})
-
-
-'''if __name__ == "__main__":
-    test_ip = FailedLoginInMem(
-        ip="27.150.182.11",
-        score=97,
-        is_tor=False,
-        total_reports=500,
-        count=10,
-        first_seen='2025-05-29 00:02:21.713862',
-        last_seen='2025-05-29 00:54:59.445423'
-    )
-    result = asyncio.run(ip_analysis_gathering(ip_info=[test_ip]))
-    print(result)'''
+    url = gateway+ip
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+    return response.json()
