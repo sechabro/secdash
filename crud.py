@@ -1,13 +1,16 @@
 import asyncio
+import base64
+import json
 import logging
 from collections import defaultdict, deque
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Tuple
 
 from fastapi.concurrency import run_in_threadpool
 from pydantic import EmailStr
-from sqlalchemy import update
+from sqlalchemy import update, and_
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlmodel import select
@@ -276,26 +279,57 @@ async def get_unanalyzed_ips(alert_manager: StreamManager) -> list[schemas.Faile
     except Exception as e:
         logger.error(f' 🤮 IP analysis loop crashed: {e}')
 
+#### CURSOR ENCODE/DECODE AND ALERT RETRIEVAL ####
+
+def cursor_encode(cursor_id: int) -> str:
+    return base64.urlsafe_b64encode(json.dumps(cursor_id).encode()).decode()
+
+def cursor_decode(cursor_id: str) -> int:
+    decoded_bytes = base64.urlsafe_b64decode(cursor_id).decode()
+    return int(decoded_bytes)
 
 async def get_all_alerts(
-        session: AsyncSession
-) -> list[schemas.AlertInMem]:
-    stmt = select(schemas.AlertForDb).order_by(
-        schemas.AlertForDb.status.asc(),  # unread (0) comes before read (1)
-        schemas.AlertForDb.date.desc()
-    )
-    results = (await session.execute(stmt)).scalars().all()
-    return [
-        asdict(schemas.AlertInMem(
-            timestamp=result.date.isoformat(),
-            alert_type=result.alert_type.value,
-            msg=result.msg,
-            ip=result.ip_address,
-            alert_id=result.id,
-            status=result.status
-        )) for result in results
-    ]
+    session: AsyncSession,
+    cursor_id: Optional[int] = None,
+    limit: int = 30
+    ) -> dict:
 
+    alert_ref = schemas.AlertForDb
+
+    if cursor_id is not None:
+        conditions = [alert_ref.id < cursor_id]
+        stmt = (
+            select(alert_ref)
+            .where(and_(*conditions))
+            .order_by(alert_ref.date.desc(), alert_ref.id.desc())
+            .limit(limit)
+        )
+    
+    else:
+        stmt = (
+            select(alert_ref)
+            .order_by(alert_ref.date.desc(), alert_ref.id.desc())
+            .limit(limit)
+        )
+
+    rows = (await session.execute(stmt)).scalars().all()
+    next_cursor = cursor_encode(rows[-1].id) if len(rows) == limit else None
+    
+    return {
+        "alerts": [
+            asdict(schemas.AlertInMem(
+                timestamp=row.date.isoformat(),
+                alert_type=row.alert_type.value,
+                msg=row.msg,
+                ip=row.ip_address,
+                alert_id=row.id,
+                status=row.status
+            )) for row in rows
+        ],
+        "next_cursor": next_cursor,
+        "next_query": len(rows) == limit
+    }
+#######################################################
 
 async def get_alert_and_ip(alert_id: int, session: AsyncSession) -> dict:
     result = await session.execute(

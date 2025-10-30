@@ -97,60 +97,114 @@ export function alertStreamRender(alertStreamData) {
     }
 }
 
+// ---- paging state ----
+let nextCursor = null;
+let hasMore = true;
+let loading = false;
 
-export async function renderAllAlerts() {
-    const container = document.getElementById("message-center");
-    if (!container) {
-        console.warn("❗️Message center container not found.");
-        return;
+async function fetchAlerts(cursor) {
+  try {
+    let url = "/all-alerts";
+    if (cursor) {
+        const params = new URLSearchParams({ c_info: cursor });
+        url = `/all-alerts?${params.toString()}`;
     }
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json(); // returns { alerts, next_cursor, next_query }
+  } catch (err) {
+    console.error("🚨 fetchAlerts failed:", err);
+    // Return a safe shape so callers don't crash
+    return { alerts: [], next_cursor: null, next_query: false };
+  }
+}
 
-    // Clear previous contents
+function appendAlerts(alerts) {
+  const tbody = document.getElementById("alert-inbox-body");
+  if (!tbody) return;
+
+  tbody.replaceChildren(); // clear existing rows
+  
+  for (let i = 0; i < alerts.length; i++) {
+    const a = alerts[i];
+    const status = typeof a.status === "number"
+      ? (a.status === 0 ? "unread" : "read")
+      : (a.status || "unread");
+
+    const row = document.createElement("tr");
+    row.classList.add("alert-row");
+    if (status === "unread") row.classList.add("unread");
+    row.dataset.alertId = a.alert_id;
+
+    row.innerHTML = `
+      <td>${status}</td>
+      <td>${new Date(a.timestamp).toLocaleString()}</td>
+      <td>${a.alert_type}</td>
+      <td>${a.ip}</td>
+      <td>${a.msg}</td>
+    `;
+    row.addEventListener("click", () => fetchAndRenderAlertDetail(a.alert_id));
+    tbody.appendChild(row);
+  }
+}
+
+async function loadNextPage() {
+  if (loading || !hasMore) return;
+  loading = true;
+
+  const btn = document.getElementById("alerts-load-more");
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+
+  const data = await fetchAlerts(nextCursor);
+  appendAlerts(Array.isArray(data.alerts) ? data.alerts : []);
+
+  nextCursor = data.next_cursor ?? null;
+  hasMore = Boolean(data.next_query ?? (nextCursor != null));
+
+  if (btn) {
+    if (hasMore) { btn.disabled = false; btn.textContent = "Next Page"; }
+    else         { btn.disabled = true;  btn.textContent = "No more"; }
+  }
+
+  loading = false;
+}
+
+export async function renderAllAlerts(reset = true) {
+  const container = document.getElementById("message-center");
+  if (!container) {
+    console.warn("❗️Message center container not found.");
+    return;
+  }
+
+  if (reset) {
+    // reset state + paint skeleton
+    nextCursor = null; hasMore = true; loading = false;
+
     container.innerHTML = `
-        <h2>📬 Message Center</h2>
-        <table class="alert-table">
-            <thead>
-                <tr>
-                    <th>Status</th>
-                    <th>Time</th>
-                    <th>Type</th>
-                    <th>IP</th>
-                    <th>Message</th>
-                </tr>
-            </thead>
-            <tbody id="alert-inbox-body"></tbody>
-        </table>
-        
+      <h2>📬 Message Center</h2>
+      <table class="alert-table">
+        <thead>
+          <tr>
+            <th>Status</th><th>Time</th><th>Type</th><th>IP</th><th>Message</th>
+          </tr>
+        </thead>
+        <tbody id="alert-inbox-body"></tbody>
+      </table>
+      <div class="pager">
+        <button id="alerts-load-prev" class="load-more">Prev Page</button>
+        <button id="alerts-load-more" class="load-more">Next Page</button>
+      </div>
     `;
 
-    try {
-        const res = await fetch("/all-alerts");
-        const alerts = await res.json();
+    document.getElementById("alerts-load-more")
+      ?.addEventListener("click", () => loadNextPage());
 
-        const tbody = document.getElementById("alert-inbox-body");
-
-        for (const alert of alerts) {
-            const row = document.createElement("tr");
-            row.classList.add("alert-row");
-            row.dataset.alertId = alert.alert_id;
-            if (alert.status === "unread") {
-                row.classList.add("unread");
-            }
-
-            row.innerHTML = `
-                <td>${alert.status || "unread"}</td>
-                <td>${new Date(alert.timestamp).toLocaleString()}</td>
-                <td>${alert.alert_type}</td>
-                <td>${alert.ip}</td>
-                <td>${alert.msg}</td>
-            `;
-
-            row.addEventListener("click", () => fetchAndRenderAlertDetail(alert.alert_id));
-            tbody.appendChild(row);
-        }
-    } catch (err) {
-        console.error("🚨 Failed to fetch alerts:", err);
-    }
+    // first page
+    await loadNextPage();
+  } else {
+    // if you ever want “infinite scroll”, call loadNextPage() here
+    await loadNextPage();
+  }
 }
 
 export async function fetchAndRenderAlertDetail(alertId) {

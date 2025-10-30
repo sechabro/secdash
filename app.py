@@ -109,14 +109,16 @@ async def on_startup():
         logger.info(f' Database already exists... Checking tables...')
     if await create_tables():
         logger.info(f' Table check successful.')
-    app.state.iostat_task = asyncio.create_task(
+    
+    # commenting out iostat and ps streams for now to reduce load
+    '''app.state.iostat_task = asyncio.create_task(
         io_stream(
             iostat_manager=iostream_manager
         )
     )
     app.state.ps_task = asyncio.create_task(
         ps_stream(ps_manager=ps_stream_manager)
-    )
+    )'''
     app.state.ssh_task = asyncio.create_task(
         ssh_watch(ssh_manager=ssh_watch_manager)
     )
@@ -134,8 +136,9 @@ async def on_startup():
 
 @app.on_event("shutdown")
 async def shutdown_async():
-    app.state.iostat_task.cancel()
-    app.state.ps_task.cancel()
+    # commenting out iostat and ps streams for now to reduce load
+    #app.state.iostat_task.cancel()
+    #app.state.ps_task.cancel()
     app.state.ssh_task.cancel()
     app.state.alerts_task.cancel()
     app.state.ips_stream_task.cancel()
@@ -234,15 +237,15 @@ async def dashboard(request: Request, session: SessionDep, current_user: str = D
 
     return templates.TemplateResponse("dashboard.html", {"request": request, "user": current_user})
 
-
-@app.get("/connections")
+# commenting out connections and host status. unnecessary endpoints.
+'''@app.get("/connections")
 async def connections(current_user: str = Depends(get_current_user)) -> list:
     return await run_in_threadpool(established_connections)
 
 
 @app.get("/host")
 async def host_status(current_user: str = Depends(get_current_user)) -> dict:
-    return await host_info_async()
+    return await host_info_async()'''
 
 
 @app.get("/alerts/{alert_id}")
@@ -298,9 +301,16 @@ async def get_alerts(
 @app.get("/all-alerts")
 async def all_alerts(
     session: SessionDep,
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_user),
+    c_info: str | None = None
 ) -> JSONResponse:
-    result = await crud.get_all_alerts(session=session)
+    cursor_id = crud.cursor_decode(cursor_id=c_info) if c_info else None
+
+    result = await crud.get_all_alerts(
+        session=session,
+        cursor_id=cursor_id
+    )
+
     return JSONResponse(content=result)
 
 
@@ -315,8 +325,8 @@ async def get_ips(
         media_type="text/event-stream"
     )
 
-
-@app.get("/iostat-stream")
+# commenting out iostat and ps streams.
+'''@app.get("/iostat-stream")
 async def iostat_stream(
     request: Request,
     current_user: str = Depends(get_current_user)
@@ -337,7 +347,7 @@ async def process_stream(
             request=request,
         ),
         media_type="text/event-stream"
-    )
+    )'''
 
 
 ##### OAUTH2 #######################################################################################
